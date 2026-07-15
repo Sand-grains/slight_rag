@@ -1,0 +1,6 @@
+.env
+__pycache__/
+.venv/
+data/
+guide_version1.md
+.idea/
