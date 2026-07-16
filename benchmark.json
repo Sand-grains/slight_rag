@@ -1,0 +1,247 @@
+[
+    {
+        "question": "什么是RAG，为什么需要它",
+        "ground_truth": "RAG（检索增强生成）是一种系统架构模式。核心思路是让LLM在回答问题之前，先从外部知识库检索最相关的知识，然后将检索结果作为上下文提供给LLM生成正确回答。RAG解决了三个问题：模型训练数据有截止日期导致知识过时；LLM无依据时会幻觉编造；LLM有私域知识盲区，不知道企业内部知识。",
+        "source_doc": "Knowledge/MainLine/RAG基础架构"
+    },
+    {
+        "question": "RAG系统的完整流程是什么",
+        "ground_truth": "RAG分为两条管线。离线索引管线：数据收集→数据预处理→文本分块→Embedding向量化→向量入库。在线查询管线：用户提问→查询改写→混合检索→Rerank重排序→拼入Prompt→LLM生成。",
+        "source_doc": "Knowledge/MainLine/RAG基础架构"
+    },
+    {
+        "question": "Embedding是什么",
+        "ground_truth": "Embedding是将文本映射为稠密向量的过程。在向量语义空间中，语义相近的文本对应的向量位置靠近。在RAG中，Embedding是连接用户query与知识库的桥梁：离线索引时Embedding将文档分块编码为向量存入向量数据库；在线查询时Embedding将query编码为向量用于检索。离线索引和在线查询必须使用同一个Embedding模型，否则查询向量和文档向量处于不同的语义空间，检索结果无意义。",
+        "source_doc": "Knowledge/Branch/RAG子环节/Embedding"
+    },
+    {
+        "question": "为什么需要混合检索",
+        "ground_truth": "稠密检索通过语义相似性匹配文本但可能丢失精确术语和特定名词；稀疏检索擅长精确关键词匹配但无法理解语义。混合检索取长补短：用BM25算法作稀疏检索捕捉精确匹配，用Vector算法捕捉语义，再将二者结果通过RRF算法融合，实际结果比单一检索高效。",
+        "source_doc": "Knowledge/Branch/RAG子环节/检索召回"
+    },
+    {
+        "question": "分块大小应该怎么确定",
+        "ground_truth": "分块大小没有精确值，使用于多数场景的经验范围是256-512 token。分块太小会丢失上下文，分块太大会引入噪声且稀释语义。确定因素包括：Embedding模型的最大长度限制、具体测试看多大的chunk能获得最佳检索效果。需要通过构建测试集分别测试不同分块大小来确定。",
+        "source_doc": "Knowledge/Branch/RAG子环节/文本分块"
+    },
+    {
+        "question": "什么是向量数据库，和传统数据库有什么区别",
+        "ground_truth": "向量数据库是专门为高维向量存储和相似性检索设计的数据系统，擅长高维度向量的相似性搜索。传统数据库擅长结构化查询和精确匹配。形式上的差距在于数据表示方式、索引结构、查询目标和性能优化方向。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/向量数据库面试题"
+    },
+    {
+        "question": "什么是ANN，为什么不用精确搜索",
+        "ground_truth": "ANN（近似最近邻搜索）的目标是在召回率、延迟、内存、构建成本之间得到最佳平衡。不用精确搜索的原因：如果每次查询让query与全部向量逐一计算相似度再一一比对，理论精确但延迟高、成本高、又慢又贵，支撑不了生产和高并发。",
+        "source_doc": "Knowledge/Branch/RAG子环节/向量数据库"
+    },
+    {
+        "question": "HNSW和IVF的区别是什么",
+        "ground_truth": "IVF基于聚类分桶，HNSW基于图导航。HNSW通常有更好的召回与性能表现但内存成本更高；IVF更容易从桶与探测数理解调参。HNSW把向量组织成可导航的多层图，上层图稀疏用于快速靠近目标区域，下层图密集用于局部精细搜索。",
+        "source_doc": "Knowledge/Branch/RAG子环节/向量数据库"
+    },
+    {
+        "question": "top-k应该怎么定",
+        "ground_truth": "没有固定值，需综合考虑检索质量与噪声平衡、大模型上下文窗口限制、是否使用重排。有重排模型时k可设大一点如20~30，重排后只取3~5。没有重排模型时k设小一点如10~15，靠大模型自己过滤。实践经验：快速问答k=3~5，通用RAG k=5~10，长文档摘要k=10~20。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/向量数据库面试题"
+    },
+    {
+        "question": "递归字符分块的分隔符层级是什么，为什么这样设计",
+        "ground_truth": "分隔符优先级为：段落(\\n\\n) > 段落内换行(\\n) > 空格 > 逐字符切割(兜底)。优先使用最高优先级分隔符切分，如果分块仍大于设定大小就按下一级分隔符切。这样设计主要考虑语义完整性，优先保留最大的语义单元：段落是明确能区分两个主题的分隔，之后切分粒度逐渐减小反映语义单元粒度逐渐减小。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
+    },
+    {
+        "question": "语义分块和固定分块有什么区别",
+        "ground_truth": "固定分块是按固定字符数机械切分，不关心具体语义内容，一般会加overlap保持上下文连续性。语义分块是先将文本切分为句子然后立即Embedding，计算相邻句子相似度，连续高相似度的句子合并为一个块，相似度显著下降的地方（语义断点）确定切分位置。固定分块适用于对速度有要求的场景；语义分块适用于对分块质量要求高、文档主题变化显著、对Embedding成本不敏感的场景。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
+    },
+    {
+        "question": "Parent-child Chunking怎么实现",
+        "ground_truth": "两层切分：第一次把文档切成大块（如1024token），第二次切成小块（如256token）。小块用于Embedding建立索引和检索，检索到小块后通过parent_id映射回它所在的大块，将大块返回给LLM。这样兼具了检索精度和上下文完整性。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
+    },
+    {
+        "question": "Overlap有什么用，设为多大合适",
+        "ground_truth": "Overlap（冗余量）保证相邻语块之间有相同的文本，保持上下文连续性。当切点有语义依据（如标题层级、语义相似度）就不需要设置。一般设定为语块大小的10%~20%，过大浪费存储和计算，过小达不到保持上下文的功能。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
+    },
+    {
+        "question": "换了Embedding模型需要重新分块吗",
+        "ground_truth": "分块和Embedding具有耦合关系。分块大小不能超过Embedding模型的token限制，超出部分会被直接丢弃。不同的Embedding模型对不同大小的分块表现不同，有的对短文本效果好，有的对长文本效果好。切换Embedding模型后最好重新调整分块大小，分块策略本身可能不用修改但参数需要调整，并且所有块都需要重新Embedding。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
+    },
+    {
+        "question": "Bi-Encoder和Cross-Encoder有什么区别",
+        "ground_truth": "Bi-Encoder（双塔模型）是query和document各自独立通过Encoder编码为向量，之后用向量距离度量相似度，两条路径互不相见。所有document可离线预编码，检索时只需对query作一次编码，牺牲语义细粒度交互换速度。Cross-Encoder（交叉编码器）将query和document拼接送入同一个Transformer，模型同时看到两者，最终输出相关性分数而非向量，不能预编码，每次需对query与每个候选document做完整前向传播，保留了token级语义交互但牺牲速度。Bi-Encoder是Embedding模型的实现基础，Cross-Encoder是Reranker模型的实现基础。",
+        "source_doc": "Knowledge/Branch/other/Bi-Encoder和Cross-Encoder"
+    },
+    {
+        "question": "稠密检索和稀疏检索有什么区别",
+        "ground_truth": "稠密检索（Dense Retrieval）也叫向量检索，不再匹配字面上的词而是匹配语义（向量空间中相近）。优点是语义理解能力强、支持跨语言检索、泛化能力强；缺点是精确匹配能力弱、模型效果依赖训练数据、可能被语义相近但逻辑无关的词带偏（语义漂移）。稀疏检索（Sparse Retrieval）也叫关键词检索，直接匹配query与文档之间的共有词项，以BM25或TF-IDF计算相关性得分。优点是精确匹配能力强、可解释性好；缺点是语义理解不足、无法处理同义词和改写。",
+        "source_doc": "Knowledge/Branch/other/稠密检索和稀疏检索"
+    },
+    {
+        "question": "RRF算法是什么",
+        "ground_truth": "RRF（Reciprocal Rank Fusion，倒数排名融合）是一种将多个检索结果列表合并成单一列表的算法。不同召回算法输出的分数范围完全不同，直接相加无意义。RRF忽略具体分数只看排名，排名即代表该路算法对这篇文档的相对信心。公式为RRF(d) = Σ 1/(k + r(d))，k是平滑常数一般固定为60。",
+        "source_doc": "Knowledge/Branch/other/RRF算法"
+    },
+    {
+        "question": "Query改写有哪些策略",
+        "ground_truth": "主要有三种策略。HyDE（假设文档嵌入）：让LLM生成假设性答案段落，用这个段落去检索真实文档，核心思想是'用答案找答案'，缩小query和文档的语义鸿沟。Multi-Query（多查询扩展）：让LLM生成语义等价但不同表述的多个查询，并行检索并合并结果，覆盖更广泛的文档。Step-Back（退一步提问）：让LLM生成更高层次的抽象问题来检索，捕获更宏观的背景知识。",
+        "source_doc": "Knowledge/Branch/RAG优化子策略/Query改写"
+    },
+    {
+        "question": "HyDE生成的假设性文档是错的怎么办",
+        "ground_truth": "假设文档嵌入不要求生成的假设性文档正确，只要求它的语言模式接近真实文档。即使编造了错误事实，只要用词和句式风格像目标文档，查询向量就会落在正确的区域附近。最终返回的文档分块来自向量数据库而不是大模型此时生成的编造。如果大模型对目标领域完全不知道连相关术语都不知道，HyDE就会失效，此时可以在提示词中加入目标领域的用词和句式示例。",
+        "source_doc": "Knowledge/Branch/QA/HyDE生成的假设性文档是错的怎么办"
+    },
+    {
+        "question": "为什么要做Rerank重排序",
+        "ground_truth": "Bi-Encoder做初筛速度快但语义交互粗略，可能召回大量表面相关实际无关的结果。Cross-Encoder（Reranker）在初筛的小范围候选集上做精细重排，保留了query和document之间的token级语义交互，能更准确地判断相关性。RAG管线因此使用'Embedding模型初筛→Reranker细筛'的两阶段策略，在速度和精度之间取得平衡。",
+        "source_doc": "Knowledge/Branch/RAG优化子策略/Rerank优化"
+    },
+    {
+        "question": "LLM为什么会产生幻觉",
+        "ground_truth": "LLM唯一会做的就是拟合当前文本预测下一个token，它只知道'这样的上下文'背后'通常'跟的是这样的文本，无法判定这句话的正确性。即使对某个陈述有很高的不确定性，也无法显式表达出来，仍会输出一个看起来自信的答案。另外训练过程将海量语料压缩进有限参数空间，细节、边界条件、低频事实会被模糊或丢失。幻觉无法修复但可以被工程体系约束和抑制。",
+        "source_doc": "Knowledge/Branch/QA/为什么会幻觉"
+    },
+    {
+        "question": "限制幻觉有哪些方案",
+        "ground_truth": "四种方案：用另一个独立的模型实例来做critic评判；让模型把输出落到可验证的地方（比如生成代码然后执行看结果）；用外部知识源做事实性校验（RAG+citation）；多次采样取一致性（self-consistency，对推理类任务有效，对事实类有限）。",
+        "source_doc": "Knowledge/Branch/other/限制幻觉的方案"
+    },
+    {
+        "question": "为什么接入Tool后LLM能调用API",
+        "ground_truth": "LLM本身并没有真的去调用API，它依然只能生成文本。但这个生成的文本内容是关于'我想调用哪个函数、给什么参数'。之后由代码认出这是一个函数调用指令，执行函数，把结果以Observation的形式拼回prompt。识别方式分为两种：原生Function Calling（工具调用在独立的tool_calls字段中，结构化JSON可直接取用）；ReAct文本模式（LLM把Thought/Action写在文本里，代码需要从文本中提取函数名和参数）。",
+        "source_doc": "Knowledge/Branch/QA/为什么接入Tool后LLM能调用API"
+    },
+    {
+        "question": "什么是Function Calling的完整流程",
+        "ground_truth": "六步流程：1.定义工具（声明函数名、描述、参数schema）；2.将tools参数传给Chat Completions API；3.模型返回tool_calls而不是直接回答；4.解析tool_calls中的函数名和参数；5.代码执行对应函数获取结果；6.把函数结果以tool role的消息格式追加到对话中，模型基于结果生成最终回答。流式场景下还需要手动处理未完成的tool_calls片段。",
+        "source_doc": "Knowledge/MainLine/Function-Calling"
+    },
+    {
+        "question": "什么是RPC，解决什么问题",
+        "ground_truth": "RPC（Remote Procedure Call，远程过程调用）本质上是一种通信范式，是对网络通信的抽象封装，旨在让调用远程服务上的函数像调用本地函数一样。在RPC出现之前两台机器通信需要开发者手动处理TCP连接、序列化、发送接收解析响应、超时重连等。RPC解决的就是这类与业务逻辑无关的通信机械性工作。核心机制是Stub（桩/代理），客户端的Stub拦截函数调用将函数名和参数序列化成网络消息发给服务端，服务端Stub反序列化后找到对应函数执行并返回。",
+        "source_doc": "Knowledge/Backend/RPC范式与REST架构约束"
+    },
+    {
+        "question": "REST架构的核心约束是什么",
+        "ground_truth": "六条核心约束：客户端-服务器（界面与数据分离）、无状态（每个请求需包含全部所需信息，服务器不保存会话上下文）、可缓存（响应需显式标记是否可缓存）、统一接口（资源通过URI标识，操作通过HTTP动词GET/POST/PUT/DELETE表达）、分层系统（客户端不知道是否经过中间层）、按需代码（可选，服务器可向客户端发送可执行代码）。Restful是口语化称呼，主要指统一接口这条约束的落地：URL对应资源而非动作，HTTP方法对应操作，用HTTP状态码表达结果。",
+        "source_doc": "Knowledge/Backend/RPC范式与REST架构约束"
+    },
+    {
+        "question": "流式响应和非流式响应有什么区别",
+        "ground_truth": "非流式（stream=False）：生成完全部内容后一次性打包发回来，等几秒一次性拿到完整回答，response.choices[0].message.content直接取完整文本。流式（stream=True）：生成一段就发一段，边生成边发，每隔几毫秒收到几个新token。代码层面是一个迭代器，每次yield一小块，需要手动拼接。",
+        "source_doc": "Knowledge/Backend/流式响应"
+    },
+    {
+        "question": "BM25算法是什么，什么时候开启",
+        "ground_truth": "BM25是一种在信息检索领域广泛使用的排名函数，结果是对文档与搜索查询的相关性评估值。在处理词频饱和及文档长度归一化方面表现优秀。两个核心参数：k1控制词频饱和度（默认1.2~2.0），b控制文档长度归一化（默认0.75）。如果文档含大量型号、编号、API名、人名、缩写，值得开启BM25。如果文档全是长篇小说或散文，纯向量检索已经够好，开启BM25反而增加延迟。",
+        "source_doc": "Knowledge/Branch/other/BM25算法"
+    },
+    {
+        "question": "Token是什么",
+        "ground_truth": "Token（词元）是模型'阅读'文本的最小单位。原始文本输入进来时首先被Tokenizer切碎为片段，通过查表将片段分别映射为整数ID，然后去Q矩阵里取第ID行得到一个768维的稠密向量。Word Embedding就是Q矩阵查表后拿到的那个向量，是最终产物。",
+        "source_doc": "Knowledge/Branch/other/token"
+    },
+    {
+        "question": "BGE系列Embedding模型有什么特点",
+        "ground_truth": "BGE（BAAI General Embedding）系列针对中文语言处理首选。BGE-M3：支持100+语种，支持最大8192 token的输入，支持稠密检索、稀疏检索、多重向量。BGE-large-zh-v1.5：专注于中文，效果极佳。使用BGE模型时需要加特定的指令前缀：入库时不需要前缀，查询时需加'为这个句子生成表示以用于检索相关文章'+用户问题。如果忘记加这个前缀检索效果会大打折扣。",
+        "source_doc": "Knowledge/Branch/RAG子环节/Embedding"
+    },
+    {
+        "question": "Embedding模型选型有哪些避坑点",
+        "ground_truth": "三方面需要注意：切片长度问题——有些老模型只支持512token，超出部分会被直接丢弃；指令前缀——有些模型如BGE在生成向量时需要加特定前缀字符串，入库不加查询加，忘记加则检索效果大打折扣；维度大小——维度不是越大越好，维度越大存储越贵检索越慢，百万级以下数据量768维是性价比最高的平衡点。",
+        "source_doc": "Knowledge/Branch/RAG子环节/Embedding"
+    },
+    {
+        "question": "RAGAS框架评估哪些指标",
+        "ground_truth": "主要评估四个核心指标：Faithfulness（忠实度，回答中有没有事实是上下文里没有的，即检测幻觉，LLM将回答拆成原子声明逐条检查是否在上下文中出现）；Answer Relevancy（答案相关性，回答是否切题，LLM从回答反推问题与原始问题算相似度）；Context Precision（上下文精度，检索回来的chunk是否都对回答有用，LLM逐条判断每个chunk是否对回答有用）；Context Recall（上下文召回，应该被检索到的chunk有没有漏，LLM从回答中提取事实逐条检查是否在上下文中出现）。",
+        "source_doc": "Knowledge/MainLine/RAG优化与选型"
+    },
+    {
+        "question": "检索召回有哪些常用评估指标",
+        "ground_truth": "Recall@K（前K个结果中包含正确答案的比例，衡量'找全'的能力，评估召回阶段）；MRR@K（衡量'找到第一个对的有多快'，单答案问答场景）；NDCG@K（考虑位置加权的相关性评分，排名越靠前贡献越大，多级相关性标注）；MAP@K（每个相关文档位置上的Precision平均值，多个正确答案场景）；Hit Rate@K（前K个结果中至少包含一个正确答案的查询占比，粗粒度评估）。",
+        "source_doc": "Knowledge/Branch/RAG子环节/检索召回"
+    },
+    {
+        "question": "分块过大和过小分别有什么问题",
+        "ground_truth": "块过大：语义稀释（包含多个主题导致与任何单一查询相似度都不高）、超出Embedding模型上限（超出部分被截断语义残缺）、浪费LLM上下文窗口、检索噪声高。块过小：语义碎片化（句子碎片无法组成完整答案）、上下文丢失（缺失对象与背景描述）、检索召回不稳定（同一概念信息分散在多个小块中需大量top-k覆盖）、索引开销剧增（块数量激增向量数据库需分配更多存储空间和更高检索延迟）。",
+        "source_doc": "Knowledge/Branch/RAG子环节/文本分块"
+    },
+    {
+        "question": "什么是Late Chunking，和传统分块有什么区别",
+        "ground_truth": "Late Chunking是Jina AI提出的新范式。传统分块是先分块再对块Embedding，每个chunk在Embedding时看不到全文。Late Chunking是先把整个文档送进Embedding模型生成token级向量，再按设定的分块边界对属于该分块的token向量作mean-pooling得到分块级向量。好处是分块都看过全文包含了全文的上下文信息；缺点是需要长上下文Embedding模型如支持8192token，且成本更高。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
+    },
+    {
+        "question": "实际项目中遇到过哪些分块相关的坑",
+        "ground_truth": "最大的坑是表格处理：文档中有大量嵌套表格，如果直接使用递归字符切分表头和数据会分离，后续检索完全不可用。解决方案是在数据预处理阶段用正则和启发式规则识别表格区域，将表格整体作为一个块并在元数据中注明table类型。第二个坑是中文tokenization：分块大小按字符数和用token数差异很大，最终统一用tiktoken计算token数作为标准。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
+    },
+    {
+        "question": "如何处理包含表格和图片的PDF文档",
+        "ground_truth": "分三步处理：第一步用Unstructured或LlamaParse做布局分析，识别出文本区域、表格区域和图片区域；第二步表格整体作为一个块，图片用多模态模型生成描述文本后作为块；第三步纯文本区域使用递归字符切分器分块处理。最后每个块都注明元数据类型(text/image/table)。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
+    },
+    {
+        "question": "消息队列解决什么问题",
+        "ground_truth": "消息队列本质上将已发生的事实进行通知，让原本紧耦合的直接调用变成松耦合的异步通信。解决三个核心问题：异步（核心业务执行后可立即看到结果只需发消息通知后续非核心链路）、解耦（服务只需在业务完成后发消息到broker不管下游是什么模块）、削峰（大量消息到达Broker服务按自身处理能力慢慢消费不让大量请求直接打到DB）。这也对应了时间解耦、空间解耦和速率解耦。",
+        "source_doc": "RocketMQ"
+    },
+    {
+        "question": "RocketMQ的PushConsumer和SimpleConsumer有什么区别",
+        "ground_truth": "PushConsumer是Broker主动推送消息到Consumer的Listener，默认单线程顺序消费，消息处理时间过长会导致后续消息排队阻塞且Broker超时可能造成重复消费。适用于消息处理时长可预测、无异步处理的场景。SimpleConsumer主动从Broker拉取消息，支持设置长轮询超时和消息不可见时长，适用于消息处理时长无法预估、异步分发、批量消费等场景。SimpleConsumer需要手动ack确认消费，PushConsumer通过监听器返回值确认。",
+        "source_doc": "RocketMQ"
+    },
+    {
+        "question": "RocketMQ的事务消息是如何工作的",
+        "ground_truth": "事务消息解决分布式系统中消息发送与本地事务的原子性问题。流程：生产者开启事务并发送半消息（发送到Broker但标记为不可见消费者拿不到）→执行本地事务→根据本地事务结果commit（半消息变为普通消息对消费者可见）或rollback（半消息被丢弃）。如果服务端在指定时间内无法确认状态，会触发TransactionChecker事务检查器进行被动兜底（超时回查）。RocketMQ只保证消息发送契合实际操作，消息处理失败需消费端自行处理。",
+        "source_doc": "RocketMQ"
+    },
+    {
+        "question": "RocketMQ的顺序消息如何保证顺序性",
+        "ground_truth": "通过MessageGroup判定和识别，相同消息组的多条消息按FIFO顺序发送到同一个队列。生产顺序性：使用单个线程发送或通过setMessageGroup保证同一组内有序。消费顺序性：PushConsumer底层已串行投递；SimpleConsumer需业务方自行保证，做法是按QueueId分组、按offset排序恢复FIFO、逐条处理逐条ACK。注意绝对顺序性在工程上不可行：FIFO主题中一条消息消费失败后阻塞该队列，超过最大重试次数进入死信队列隔离。",
+        "source_doc": "RocketMQ"
+    },
+    {
+        "question": "RocketMQ中Topic是什么",
+        "ground_truth": "Topic（主题）是一组队列的集合，用于管理不同业务类型的消息以实现隔离存储和订阅。Topic name在集群中全局唯一。5.x版本开始每个主题只允许发送一种类型的消息（强制验证），包括NORMAL（普通）、FIFO（顺序）、DELAY（延时）、TRANSACTION（事务）。通过mqadmin updatetopic命令创建或更新。虽然所有消息以主题粒度管理，但实际操作实现是面向队列的。",
+        "source_doc": "RocketMQ"
+    },
+    {
+        "question": "RocketMQ如何解决重复消费问题",
+        "ground_truth": "业务对消息重复消费敏感时需要自行在业务层面去重。方法：确定业务唯一键如msgId或消息唯一标识字段如订单id，消费前判断唯一键在DB中是否存在，不存在则插入并消费否则跳过。也可以使用Redis来保证。需要注意数据库操作的原子性问题。RocketMQ本身不保证Exactly-Once消费语义，只保证At-Least-Once。",
+        "source_doc": "RocketMQ"
+    },
+    {
+        "question": "RocketMQ中如何提高消费速度",
+        "ground_truth": "提高消费并行度：同一ConsumerGroup下增加Consumer实例数量；增加单个Consumer的消费并行线程（PushConsumer使用setConsumptionThreadCount，SimpleConsumer由业务线程自由增加并发）。批量消费：使用SimpleConsumer设置批次大小一次拉取多条消息。优化DB交互：将多次单查询合并为批量查询，多次单插入合并为批量插入。消息堆积时可视情况选择丢弃不重要消息。",
+        "source_doc": "RocketMQ"
+    },
+    {
+        "question": "为什么RAG极度重视文档解析",
+        "ground_truth": "垃圾数据输入只能得到垃圾效果输出。90%的RAG检索失败根源都出在数据预处理阶段。常见文档格式的问题：半结构化的Word文档内嵌图表和OLE嵌入对象；无序版式的PDF文件直接丧失逻辑结构，多栏布局不可直接读取，非文本扫描完全没有字符。",
+        "source_doc": "Knowledge/Branch/QA/为什么RAG极度重视文档解析"
+    },
+    {
+        "question": "什么是ANN近似最近邻搜索，近似在什么地方",
+        "ground_truth": "ANN在不扫描全量向量的前提下，用索引结构快速缩小候选集再在候选集中做精细比较。流程为：候选生成（通过桶/图/量化结构筛选掉大部分不可能相关的数据）→距离计算（只对较小的候选集合计算）→结果保证（结果高概率接近最优）。核心是在召回率、延迟、内存、构建成本之间作最优平衡。",
+        "source_doc": "Knowledge/Branch/RAG子环节/向量数据库"
+    },
+    {
+        "question": "Milvus中一条数据从写入到最佳检索状态的完整路径",
+        "ground_truth": "八步路径：1.Client构造请求调用insert；2.Proxy层接收并路由做参数校验和哈希分配；3.写入请求进入消息队列持久化保障不丢失；4.DataNode从MQ消费写入内存中的Growing Segment（数据已可查询但无索引）；5.Segment达到大小阈值后被标记为Sealed Segment；6.Flush持久化写入对象存储（数据安全落盘此时仍无索引）；7.IndexNode异步构建索引文件写回对象存储；8.QueryNode Load从对象存储加载Segment数据和索引文件到内存，此时数据进入最高效检索状态。",
+        "source_doc": "Knowledge/Branch/RAG子环节/向量数据库"
+    },
+    {
+        "question": "MQE、HyDE、Step-Back三者的核心区别是什么",
+        "ground_truth": "三者解决不同的问题。MQE（多查询扩展）通过生成多个语义等价但表述不同的查询并行检索合并结果，解决同一问题有不同表述方式的语义鸿沟。HyDE（假设文档嵌入）让LLM先生成假设性答案再用该答案检索，用答案找答案，缩小query和文档之间的语义鸿沟。Step-Back（退一步提问）生成更高层次的抽象问题来检索更宏观的背景知识。三者可以整合到统一的扩展检索框架中：扩展（生成多个扩展查询）→检索（并行执行向量检索）→合并（去重和分数排序）。",
+        "source_doc": "Knowledge/Branch/RAG优化子策略/Query改写"
+    },
+    {
+        "question": "分块质量怎么评估",
+        "ground_truth": "三层评估：第一层Recall@k，构建测试集看正确答案是否在top-k结果集中，要求Recall@5大于0.85。第二层语义完整性检查，随机抽查100个块看语义完整性，人工打分平均分需要大于4。第三层端到端评估，通过RAGAS等框架评估最终回答的faithfulness（信任度）和relevancy（相关度）。",
+        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
+    }
+]

@@ -1,5 +1,6 @@
+import uuid
 from typing import List
-from .loader import Document
+from .document import Document
 from config import CHUNK_SIZE, CHUNK_OVERLAP
 
 
@@ -11,7 +12,9 @@ def chunk(documents: List[Document], chunk_size: int = CHUNK_SIZE, chunk_overlap
         if len(text) <= chunk_size:  # 如果text长度小于chunk, 这个分块就不用切
             chunks.append(Document(
                 content=text,
-                metadata={**doc.metadata, "chunk_index": 0}  # 继承原 metadata 并追加块内序号
+                metadata={**doc.metadata, "chunk_index": 0},      # 继承原 metadata 并追加块内序号
+                doc_id=doc.doc_id,                                 # 继承来源文档 ID
+                chunk_id=uuid.uuid4().hex                          # 每个 chunk 生成唯一标识
             ))
             continue
 
@@ -24,7 +27,9 @@ def chunk(documents: List[Document], chunk_size: int = CHUNK_SIZE, chunk_overlap
             chunk_text = text[start:end]  # 切出当前窗口的字符, 追加到下一个chunk
             chunks.append(Document(
                 content=chunk_text,
-                metadata={**doc.metadata, "chunk_index": idx}
+                metadata={**doc.metadata, "chunk_index": idx},
+                doc_id=doc.doc_id,                                 # 继承来源文档 ID
+                chunk_id=uuid.uuid4().hex                          # 每个 chunk 生成唯一标识
             ))
             idx += 1
             start += step  # 窗口前移 step 个字符

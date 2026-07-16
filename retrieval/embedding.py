@@ -1,6 +1,6 @@
 from typing import List
-from sentence_transformers import SentenceTransformer
-from config import EMBEDDING_MODEL
+from config import EMBEDDING_MODEL          # 先加载配置（触发 load_dotenv()，设置 HF_ENDPOINT 等环境变量）
+from sentence_transformers import SentenceTransformer  # 后导入模型库（此时环境变量已就绪）
 
 _model: SentenceTransformer | None = None  # 模块级单例，整个进程只加载一次模型
 

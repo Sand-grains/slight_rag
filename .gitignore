@@ -3,4 +3,5 @@ __pycache__/
 .venv/
 data/
 guide_version1.md
+guide_version2.md
 .idea/
