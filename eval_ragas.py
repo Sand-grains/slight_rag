@@ -68,7 +68,7 @@ def _judge_embeddings():
     """裁判 Embeddings — 本地轻量模型, 避免调 API 计费"""
     # all-MiniLM-L6-v2: 384 维, 推理快, 与项目索引用的 Embedding 模型一致
     return LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name="D:/Model"
     ))
 
 
@@ -236,17 +236,17 @@ def eval_end2end(retriever: Retriever, questions: list[dict], top_k: int = TOP_K
 
     # ---- 诊断矩阵: 二分判断定位瓶颈 ----
     print(f"\n  ---- 诊断矩阵 ----")
-    ret_ok = ret_result["recall"] >= 0.5                         # 检索召回率阈值
-    gen_ok = all_metrics.get("faithfulness", 0) >= 0.6           # 生成忠实度阈值
+    ret_ok = ret_result["recall"] >= 0.6                         # 检索的召回率阈值(>=0.6才认为相关)
+    gen_ok = all_metrics.get("faithfulness", 0) >= 0.6           # 生成的忠实度阈值(>=0.6才认为相关)
 
     if ret_ok and gen_ok:
         print("  Retriever ✓ | Generator ✓  → 系统健康")
     elif ret_ok and not gen_ok:
-        print("  Retriever ✓ | Generator ✗  → 检索没问题, 优化方向: Prompt模板 / LLM选型")
+        print("  Retriever ✓ | Generator ✗  → Generator有问题")
     elif not ret_ok and gen_ok:
-        print("  Retriever ✗ | Generator ✓  → 生成没问题, 优化方向: Embedding模型 / chunk策略")
+        print("  Retriever ✗ | Generator ✓  → Retriever有问题")
     else:
-        print("  Retriever ✗ | Generator ✗  → 双方都有问题, 先从 Retriever 修起(更可控)")
+        print("  Retriever ✗ | Generator ✗  → 双方都有问题")
 
     return all_metrics
 

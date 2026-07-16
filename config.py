@@ -11,7 +11,7 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL")      # API 地址，如 https://api.dee
 EVAL_LLM_MODEL_ID = os.getenv("EVAL_LLM_MODEL_ID", "deepseek-chat")  # 评估专用低成本模型
 
 # Embedding 模型名称，首次运行自动从 HuggingFace 下载到本地缓存
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL = "D:/Model"  # BGE-M3, 1024 维, 本地路径
 
 # chunk配置层
 CHUNK_SIZE = 500      # 文本切分的窗口大小（字符数）
