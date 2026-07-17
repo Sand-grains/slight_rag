@@ -5,3 +5,4 @@ data/
 guide_version*.md
 .idea/
 .vector_cache/
+*.png

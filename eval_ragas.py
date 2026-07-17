@@ -17,7 +17,7 @@ from retrieval.embedding import embed     # 文本 → 向量 (batch)
 from retrieval.store import VectorStore   # 向量存储 (内存, numpy 矩阵)
 from retrieval.retriever import Retriever # 检索器 (余弦相似度 + Top-K)
 from retrieval.generator import Generator # 生成器 (Prompt 模板 + LLM 调用)
-from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, EVAL_LLM_MODEL_ID, TOP_K
+from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, EVAL_LLM_MODEL_ID, TOP_K, RELEVANCE_THRESHOLD
 
 # ---- 评估框架 ----
 from ragas import evaluate, EvaluationDataset
@@ -77,7 +77,7 @@ def _judge_embeddings():
 # ==================== Layer1: Retriever ====================
 
 def eval_retriever(retriever: Retriever, questions: list[dict], top_k: int = TOP_K,
-                   threshold: float = 0.6):
+                   threshold: float = RELEVANCE_THRESHOLD):
     """Layer1: 单独测 Retriever
     返回指标为Precision@K, Recall@K, MRR, NDCG
 

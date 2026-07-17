@@ -17,3 +17,4 @@ EMBEDDING_MODEL = "D:/Model"  # BGE-M3, 1024 维, 本地路径
 CHUNK_SIZE = 500      # 文本切分的窗口大小（字符数）
 CHUNK_OVERLAP = 100   # 相邻 chunk 之间的重叠量（字符数）
 TOP_K = 5             # 检索时返回相似度最高的 Top-K 个 chunk
+RELEVANCE_THRESHOLD = float(os.getenv("RELEVANCE_THRESHOLD", "0.6"))  # 余弦相似度 >= 此值认为 chunk 与 GT 相关
