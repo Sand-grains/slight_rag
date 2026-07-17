@@ -1,0 +1,19 @@
+# ==================== RAG 核心 ====================
+numpy>=2.0
+sentence-transformers>=5.0
+openai>=2.0
+python-dotenv>=1.0
+
+# ==================== 评估 (RAGAS) ====================
+ragas>=0.4
+langchain-openai>=1.0
+langchain-community>=0.4
+
+# ==================== Agent ====================
+hello-agents>=0.2
+
+# ==================== 硬件相关 (请按你的环境选择安装方式) ====================
+# NVIDIA GPU:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
+# CPU only:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
