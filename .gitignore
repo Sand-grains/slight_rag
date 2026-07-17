@@ -5,3 +5,4 @@ data/
 guide_version1.md
 guide_version2.md
 .idea/
+.vector_cache/

@@ -1,7 +1,12 @@
 import numpy
+import pickle
+from pathlib import Path
 from typing import List
 from indexing.loader import Document
 from config import TOP_K
+
+
+CACHE_DIR_NAME = ".vector_cache"
 
 
 class VectorStore:
@@ -38,3 +43,25 @@ class VectorStore:
         sorted_order = numpy.argsort(top_scores)         # 升序排列，返回排序后的位置映射
         top_indices = top_indices[numpy.flip(sorted_order)]  # flip 反转得到降序
         return [self._chunks[i] for i in top_indices]    # 按得分从高到低返回对应 chunk
+
+    def vector_persistence(self, cache_dir: str = CACHE_DIR_NAME):
+        """将当前 chunks 和 vectors 持久化到磁盘"""
+        path = Path(cache_dir)
+        path.mkdir(exist_ok=True)
+        with open(path / "chunks.pkl", "wb") as f:
+            pickle.dump(self._chunks, f)
+        numpy.save(path / "vectors.npy", self._vectors)
+
+    @classmethod
+    def vector_restore(cls, cache_dir: str = CACHE_DIR_NAME) -> "VectorStore | None":
+        """从磁盘恢复 VectorStore，缓存不存在时返回 None"""
+        path = Path(cache_dir)
+        chunks_file = path / "chunks.pkl"
+        vectors_file = path / "vectors.npy"
+        if not chunks_file.exists() or not vectors_file.exists():
+            return None
+        store = cls()
+        with open(chunks_file, "rb") as f:
+            store._chunks = pickle.load(f)
+        store._vectors = numpy.load(vectors_file)
+        return store

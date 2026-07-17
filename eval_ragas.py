@@ -3,8 +3,6 @@
   Layer1 — 单独测 Retriever: Precision@K, Recall@K, MRR, NDCG
   Layer2 — 单独测 Generator: 喂标准答案作上下文, 测 Faithfulness + Answer Relevancy
   Layer3 — 端到端: Retriever + Generator 真实走一遍, 全指标 + 诊断矩阵
-
-用法: python eval_ragas.py          # 默认跑三层，可改 main() 中 which_layer 变量
 """
 import json
 import numpy
@@ -32,14 +30,19 @@ from langchain_community.embeddings import HuggingFaceEmbeddings  # 本地 Embed
 # ==================== 基础设施 ====================
 
 def build_index(data_dir: str = "data") -> tuple[VectorStore, Retriever]:
-    """离线索引管线: raw files → chunks → vectors → store"""
+    """离线索引管线: 优先从缓存恢复, 缓存失效时重新编码并持久化"""
+    store = VectorStore.vector_restore()
+    if store is not None:
+        return store, Retriever(store)
     store = VectorStore()
+
     for file_path in Path(data_dir).rglob("*"):
         if file_path.is_file() and file_path.suffix in (".txt", ".md"):
             docs = load(str(file_path))
             chunks = chunk(docs)
             vectors = embed([c.content for c in chunks])
             store.add(chunks, vectors)
+    store.vector_persistence()
     return store, Retriever(store)
 
 
@@ -66,7 +69,6 @@ def _judge_llm():
 
 def _judge_embeddings():
     """裁判 Embeddings — 本地轻量模型, 避免调 API 计费"""
-    # all-MiniLM-L6-v2: 384 维, 推理快, 与项目索引用的 Embedding 模型一致
     return LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(
         model_name="D:/Model"
     ))
