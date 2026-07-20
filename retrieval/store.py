@@ -2,7 +2,7 @@ import numpy
 import pickle
 from pathlib import Path
 from typing import List
-from indexing.loader import Document
+from indexing.chunk import Chunk
 from config import TOP_K
 
 
@@ -13,10 +13,10 @@ class VectorStore:
     """内存向量存储：用列表存 chunk，用二维 numpy 数组存向量，纯内存运算检索"""
 
     def __init__(self):
-        self._chunks: List[Document] = []                # 存储所有 chunk 的 Document 对象
+        self._chunks: List[Chunk] = []                # 存储所有 chunk 的 Chunk 对象
         self._vectors: numpy.ndarray | None = None       # 二维数组，形状 (N, dim)，行对应 chunk，列对应向量维度
 
-    def add(self, documents: List[Document], vectors: List[List[float]]):
+    def add(self, documents: List[Chunk], vectors: List[List[float]]):
         """将 chunk 及其向量追加入库，支持多次调用（增量索引）"""
         self._chunks.extend(documents)                   # 追加 chunk 到列表末尾
         new_vectors = numpy.array(vectors)               # List[List[float]] → 高效的二维 numpy 数组, 方便后续计算
@@ -25,7 +25,7 @@ class VectorStore:
         else:
             self._vectors = numpy.vstack([self._vectors, new_vectors])  # 非首次，沿行方向拼接
 
-    def search(self, query_vector: List[float], top_k: int = TOP_K) -> List[Document]:
+    def search(self, query_vector: List[float], top_k: int = TOP_K) -> List[Chunk]:
         """余弦相似度检索：query_vector 与库中所有向量做点积，返回 top_k 个最相关的 chunk"""
         if self._vectors is None:
             return []                                    # 库为空，直接返回空列表

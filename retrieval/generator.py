@@ -1,6 +1,6 @@
 from typing import List
 from openai import OpenAI
-from indexing.loader import Document
+from indexing.chunk import Chunk
 from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL
 
 PROMPT_TEMPLATE = """
@@ -27,11 +27,11 @@ PROMPT_TEMPLATE = """
 请开始回答:"""
 
 
-def _build_context(chunks: List[Document]) -> str:
+def _build_context(chunks: List[Chunk]) -> str:
     """将检索到的 chunk 列表拼成带来源标记的上下文字符串"""
     parts = []
     for i, chunk in enumerate(chunks):
-        source = chunk.metadata.get("source", "未知来源")     # 取 chunk 的来源文件名，取不到就用默认值
+        source = chunk.doc_meta.title or chunk.doc_meta.source or "未知来源"
         parts.append(f"[来源{i + 1}] 文档: {source}\n{chunk.content}")  # 每个 chunk 标注序号和来源
     return "\n\n---\n\n".join(parts)                         # 用分隔线拼接多个 chunk
 
@@ -43,7 +43,7 @@ class Generator:
         self.client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)  # 复用同一个 client 实例
         self.model = model                                                  # 模型 ID，评估时可传入低成本模型
 
-    def generate(self, query: str, context_chunks: List[Document]) -> str:
+    def generate(self, query: str, context_chunks: List[Chunk]) -> str:
         """构造 prompt 并调用 DeepSeek API 生成回答"""
         context_str = _build_context(context_chunks)             # chunk 列表 → 带来源标记的上下文字符串
         prompt = PROMPT_TEMPLATE.format(

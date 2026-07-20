@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import List
-from .document import Document
+from .chunk import Chunk, DocMetadata
 
 
-def load(file_path: str, base_dir: str = "data") -> List[Document]:
-    """根据文件后缀分发到对应的加载器，返回该文件产出的 Document 列表"""
+def load(file_path: str, base_dir: str = "data") -> List[Chunk]:
+    """根据文件后缀分发到对应的加载器，返回该文件产出的 Chunk 列表"""
     path = Path(file_path)             # 字符串路径 → Path 对象，便于取后缀和跨平台处理
     suffix = path.suffix.lower()       # 统一小写，避免 .TXT vs .txt 匹配失败
     base = Path(base_dir)
@@ -15,17 +15,23 @@ def load(file_path: str, base_dir: str = "data") -> List[Document]:
         raise ValueError(f"不支持的文件类型: {suffix}")
 
 
-def _load_text(path: Path, base_dir: Path = Path("data")) -> List[Document]:
-    """纯文本加载：一次性读取全文件，内容作为单个 Document 返回"""
-    content = path.read_text(encoding="utf-8")                     # 以 UTF-8 解码读全文件
-    # 用 path 相对于 base_dir 的路径作为 doc_id（如 Knowledge/MainLine/RAG基础架构）
+def _load_text(path: Path, base_dir: Path = Path("data")) -> List[Chunk]:
+    """纯文本加载：一次性读取全文件，内容作为单个 Chunk 返回（后续由 chunker 切分）"""
+    content = path.read_text(encoding="utf-8")
     try:
         relative = path.relative_to(base_dir)
         doc_id = str(relative.with_suffix("")).replace("\\", "/")
     except ValueError:
         doc_id = path.stem
-    return [Document(
+    doc_meta = DocMetadata(
+        title=path.stem,
+        author="sd",                            # 本地文档默认作者
+        source=str(path),
+        doc_type=path.suffix.lower(),
+    )
+    return [Chunk(
         content=content,
-        metadata={"source": str(path)},
-        doc_id=doc_id                                               # 相对路径 → 确定性 ID，人可读
+        retrieval_text=content,
+        doc_id=doc_id,
+        doc_meta=doc_meta,
     )]

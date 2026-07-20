@@ -1,4 +1,4 @@
-from .document import Document            # 文本容器
+from .chunk import Chunk, DocMetadata     # 文本容器 + 文档元数据
 from .loader import load                    # 文档加载
 from .chunker import chunk                  # 文本切分
 

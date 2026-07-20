@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import List
 
 # ---- 项目内部模块 ----
-from indexing.loader import load          # 文件 → Document 列表
-from indexing.chunker import chunk        # Document → Chunk 列表
+from indexing.loader import load          # 文件 → Chunk 列表
+from indexing.chunker import chunk        # Chunk 列表 → Chunk 列表 (切分后)
 from retrieval.embedding import embed     # 文本 → 向量 (batch)
 from retrieval.store import VectorStore   # 向量存储 (内存, numpy 矩阵)
 from retrieval.retriever import Retriever # 检索器 (余弦相似度 + Top-K)
@@ -156,9 +156,9 @@ def eval_generator(questions: list[dict]):
 
     samples = []
     for i, q in enumerate(questions):
-        # 把 ground_truth 包装成 Document, 假装是检索到的"完美 chunk"
-        from indexing.loader import Document
-        perfect_chunk = Document(content=q["ground_truth"], metadata={"source": "ground_truth"})
+        # 把 ground_truth 包装成 Chunk, 假装是检索到的"完美 chunk"
+        from indexing.chunk import Chunk, DocMetadata
+        perfect_chunk = Chunk(content=q["ground_truth"], doc_meta=DocMetadata(title="ground_truth"))
         answer = generator.generate(q["question"], [perfect_chunk])
         samples.append({
             "user_input": q["question"],
