@@ -1,0 +1,32 @@
+[project]
+name = "slight-rag"
+version = "0.3.0"
+description = "从零构建的原生 RAG 系统，支持 Agent 编排与多层评估"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Sand_grains" , email = "2298581658@qq.com"}]
+
+dependencies = [
+    "numpy>=2.0",
+    "sentence-transformers>=5.0",
+    "openai>=2.0",
+    "python-dotenv>=1.0",
+    "ragas>=0.4",
+    "langchain-openai>=1.0",
+    "langchain-community>=0.4",
+    "hello-agents>=0.2",
+]
+
+[project.optional-dependencies]
+# NVIDIA GPU:  pip install -e ".[cuda]" --index-url https://download.pytorch.org/whl/cu128
+# CPU only:   pip install -e ".[cpu]" --index-url https://download.pytorch.org/whl/cpu
+cuda = ["torch", "torchvision"]
+cpu = ["torch", "torchvision"]
+
+[tool.setuptools.packages.find]
+include = ["indexing*", "retrieval*", "agent*"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
