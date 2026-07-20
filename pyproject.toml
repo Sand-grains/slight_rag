@@ -16,6 +16,8 @@ dependencies = [
     "langchain-openai>=1.0",
     "langchain-community>=0.4",
     "hello-agents>=0.2",
+    "rank-bm25>=0.2",
+    "jieba>=0.42",
 ]
 
 [project.optional-dependencies]
