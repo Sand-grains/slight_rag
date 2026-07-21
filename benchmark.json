@@ -1,247 +1,572 @@
 [
-    {
-        "question": "什么是RAG，为什么需要它",
-        "ground_truth": "RAG（检索增强生成）是一种系统架构模式。核心思路是让LLM在回答问题之前，先从外部知识库检索最相关的知识，然后将检索结果作为上下文提供给LLM生成正确回答。RAG解决了三个问题：模型训练数据有截止日期导致知识过时；LLM无依据时会幻觉编造；LLM有私域知识盲区，不知道企业内部知识。",
-        "source_doc": "Knowledge/MainLine/RAG基础架构"
-    },
-    {
-        "question": "RAG系统的完整流程是什么",
-        "ground_truth": "RAG分为两条管线。离线索引管线：数据收集→数据预处理→文本分块→Embedding向量化→向量入库。在线查询管线：用户提问→查询改写→混合检索→Rerank重排序→拼入Prompt→LLM生成。",
-        "source_doc": "Knowledge/MainLine/RAG基础架构"
-    },
-    {
-        "question": "Embedding是什么",
-        "ground_truth": "Embedding是将文本映射为稠密向量的过程。在向量语义空间中，语义相近的文本对应的向量位置靠近。在RAG中，Embedding是连接用户query与知识库的桥梁：离线索引时Embedding将文档分块编码为向量存入向量数据库；在线查询时Embedding将query编码为向量用于检索。离线索引和在线查询必须使用同一个Embedding模型，否则查询向量和文档向量处于不同的语义空间，检索结果无意义。",
-        "source_doc": "Knowledge/Branch/RAG子环节/Embedding"
-    },
-    {
-        "question": "为什么需要混合检索",
-        "ground_truth": "稠密检索通过语义相似性匹配文本但可能丢失精确术语和特定名词；稀疏检索擅长精确关键词匹配但无法理解语义。混合检索取长补短：用BM25算法作稀疏检索捕捉精确匹配，用Vector算法捕捉语义，再将二者结果通过RRF算法融合，实际结果比单一检索高效。",
-        "source_doc": "Knowledge/Branch/RAG子环节/检索召回"
-    },
-    {
-        "question": "分块大小应该怎么确定",
-        "ground_truth": "分块大小没有精确值，使用于多数场景的经验范围是256-512 token。分块太小会丢失上下文，分块太大会引入噪声且稀释语义。确定因素包括：Embedding模型的最大长度限制、具体测试看多大的chunk能获得最佳检索效果。需要通过构建测试集分别测试不同分块大小来确定。",
-        "source_doc": "Knowledge/Branch/RAG子环节/文本分块"
-    },
-    {
-        "question": "什么是向量数据库，和传统数据库有什么区别",
-        "ground_truth": "向量数据库是专门为高维向量存储和相似性检索设计的数据系统，擅长高维度向量的相似性搜索。传统数据库擅长结构化查询和精确匹配。形式上的差距在于数据表示方式、索引结构、查询目标和性能优化方向。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/向量数据库面试题"
-    },
-    {
-        "question": "什么是ANN，为什么不用精确搜索",
-        "ground_truth": "ANN（近似最近邻搜索）的目标是在召回率、延迟、内存、构建成本之间得到最佳平衡。不用精确搜索的原因：如果每次查询让query与全部向量逐一计算相似度再一一比对，理论精确但延迟高、成本高、又慢又贵，支撑不了生产和高并发。",
-        "source_doc": "Knowledge/Branch/RAG子环节/向量数据库"
-    },
-    {
-        "question": "HNSW和IVF的区别是什么",
-        "ground_truth": "IVF基于聚类分桶，HNSW基于图导航。HNSW通常有更好的召回与性能表现但内存成本更高；IVF更容易从桶与探测数理解调参。HNSW把向量组织成可导航的多层图，上层图稀疏用于快速靠近目标区域，下层图密集用于局部精细搜索。",
-        "source_doc": "Knowledge/Branch/RAG子环节/向量数据库"
-    },
-    {
-        "question": "top-k应该怎么定",
-        "ground_truth": "没有固定值，需综合考虑检索质量与噪声平衡、大模型上下文窗口限制、是否使用重排。有重排模型时k可设大一点如20~30，重排后只取3~5。没有重排模型时k设小一点如10~15，靠大模型自己过滤。实践经验：快速问答k=3~5，通用RAG k=5~10，长文档摘要k=10~20。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/向量数据库面试题"
-    },
-    {
-        "question": "递归字符分块的分隔符层级是什么，为什么这样设计",
-        "ground_truth": "分隔符优先级为：段落(\\n\\n) > 段落内换行(\\n) > 空格 > 逐字符切割(兜底)。优先使用最高优先级分隔符切分，如果分块仍大于设定大小就按下一级分隔符切。这样设计主要考虑语义完整性，优先保留最大的语义单元：段落是明确能区分两个主题的分隔，之后切分粒度逐渐减小反映语义单元粒度逐渐减小。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
-    },
-    {
-        "question": "语义分块和固定分块有什么区别",
-        "ground_truth": "固定分块是按固定字符数机械切分，不关心具体语义内容，一般会加overlap保持上下文连续性。语义分块是先将文本切分为句子然后立即Embedding，计算相邻句子相似度，连续高相似度的句子合并为一个块，相似度显著下降的地方（语义断点）确定切分位置。固定分块适用于对速度有要求的场景；语义分块适用于对分块质量要求高、文档主题变化显著、对Embedding成本不敏感的场景。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
-    },
-    {
-        "question": "Parent-child Chunking怎么实现",
-        "ground_truth": "两层切分：第一次把文档切成大块（如1024token），第二次切成小块（如256token）。小块用于Embedding建立索引和检索，检索到小块后通过parent_id映射回它所在的大块，将大块返回给LLM。这样兼具了检索精度和上下文完整性。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
-    },
-    {
-        "question": "Overlap有什么用，设为多大合适",
-        "ground_truth": "Overlap（冗余量）保证相邻语块之间有相同的文本，保持上下文连续性。当切点有语义依据（如标题层级、语义相似度）就不需要设置。一般设定为语块大小的10%~20%，过大浪费存储和计算，过小达不到保持上下文的功能。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
-    },
-    {
-        "question": "换了Embedding模型需要重新分块吗",
-        "ground_truth": "分块和Embedding具有耦合关系。分块大小不能超过Embedding模型的token限制，超出部分会被直接丢弃。不同的Embedding模型对不同大小的分块表现不同，有的对短文本效果好，有的对长文本效果好。切换Embedding模型后最好重新调整分块大小，分块策略本身可能不用修改但参数需要调整，并且所有块都需要重新Embedding。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
-    },
-    {
-        "question": "Bi-Encoder和Cross-Encoder有什么区别",
-        "ground_truth": "Bi-Encoder（双塔模型）是query和document各自独立通过Encoder编码为向量，之后用向量距离度量相似度，两条路径互不相见。所有document可离线预编码，检索时只需对query作一次编码，牺牲语义细粒度交互换速度。Cross-Encoder（交叉编码器）将query和document拼接送入同一个Transformer，模型同时看到两者，最终输出相关性分数而非向量，不能预编码，每次需对query与每个候选document做完整前向传播，保留了token级语义交互但牺牲速度。Bi-Encoder是Embedding模型的实现基础，Cross-Encoder是Reranker模型的实现基础。",
-        "source_doc": "Knowledge/Branch/other/Bi-Encoder和Cross-Encoder"
-    },
-    {
-        "question": "稠密检索和稀疏检索有什么区别",
-        "ground_truth": "稠密检索（Dense Retrieval）也叫向量检索，不再匹配字面上的词而是匹配语义（向量空间中相近）。优点是语义理解能力强、支持跨语言检索、泛化能力强；缺点是精确匹配能力弱、模型效果依赖训练数据、可能被语义相近但逻辑无关的词带偏（语义漂移）。稀疏检索（Sparse Retrieval）也叫关键词检索，直接匹配query与文档之间的共有词项，以BM25或TF-IDF计算相关性得分。优点是精确匹配能力强、可解释性好；缺点是语义理解不足、无法处理同义词和改写。",
-        "source_doc": "Knowledge/Branch/other/稠密检索和稀疏检索"
-    },
-    {
-        "question": "RRF算法是什么",
-        "ground_truth": "RRF（Reciprocal Rank Fusion，倒数排名融合）是一种将多个检索结果列表合并成单一列表的算法。不同召回算法输出的分数范围完全不同，直接相加无意义。RRF忽略具体分数只看排名，排名即代表该路算法对这篇文档的相对信心。公式为RRF(d) = Σ 1/(k + r(d))，k是平滑常数一般固定为60。",
-        "source_doc": "Knowledge/Branch/other/RRF算法"
-    },
-    {
-        "question": "Query改写有哪些策略",
-        "ground_truth": "主要有三种策略。HyDE（假设文档嵌入）：让LLM生成假设性答案段落，用这个段落去检索真实文档，核心思想是'用答案找答案'，缩小query和文档的语义鸿沟。Multi-Query（多查询扩展）：让LLM生成语义等价但不同表述的多个查询，并行检索并合并结果，覆盖更广泛的文档。Step-Back（退一步提问）：让LLM生成更高层次的抽象问题来检索，捕获更宏观的背景知识。",
-        "source_doc": "Knowledge/Branch/RAG优化子策略/Query改写"
-    },
-    {
-        "question": "HyDE生成的假设性文档是错的怎么办",
-        "ground_truth": "假设文档嵌入不要求生成的假设性文档正确，只要求它的语言模式接近真实文档。即使编造了错误事实，只要用词和句式风格像目标文档，查询向量就会落在正确的区域附近。最终返回的文档分块来自向量数据库而不是大模型此时生成的编造。如果大模型对目标领域完全不知道连相关术语都不知道，HyDE就会失效，此时可以在提示词中加入目标领域的用词和句式示例。",
-        "source_doc": "Knowledge/Branch/QA/HyDE生成的假设性文档是错的怎么办"
-    },
-    {
-        "question": "为什么要做Rerank重排序",
-        "ground_truth": "Bi-Encoder做初筛速度快但语义交互粗略，可能召回大量表面相关实际无关的结果。Cross-Encoder（Reranker）在初筛的小范围候选集上做精细重排，保留了query和document之间的token级语义交互，能更准确地判断相关性。RAG管线因此使用'Embedding模型初筛→Reranker细筛'的两阶段策略，在速度和精度之间取得平衡。",
-        "source_doc": "Knowledge/Branch/RAG优化子策略/Rerank优化"
-    },
-    {
-        "question": "LLM为什么会产生幻觉",
-        "ground_truth": "LLM唯一会做的就是拟合当前文本预测下一个token，它只知道'这样的上下文'背后'通常'跟的是这样的文本，无法判定这句话的正确性。即使对某个陈述有很高的不确定性，也无法显式表达出来，仍会输出一个看起来自信的答案。另外训练过程将海量语料压缩进有限参数空间，细节、边界条件、低频事实会被模糊或丢失。幻觉无法修复但可以被工程体系约束和抑制。",
-        "source_doc": "Knowledge/Branch/QA/为什么会幻觉"
-    },
-    {
-        "question": "限制幻觉有哪些方案",
-        "ground_truth": "四种方案：用另一个独立的模型实例来做critic评判；让模型把输出落到可验证的地方（比如生成代码然后执行看结果）；用外部知识源做事实性校验（RAG+citation）；多次采样取一致性（self-consistency，对推理类任务有效，对事实类有限）。",
-        "source_doc": "Knowledge/Branch/other/限制幻觉的方案"
-    },
-    {
-        "question": "为什么接入Tool后LLM能调用API",
-        "ground_truth": "LLM本身并没有真的去调用API，它依然只能生成文本。但这个生成的文本内容是关于'我想调用哪个函数、给什么参数'。之后由代码认出这是一个函数调用指令，执行函数，把结果以Observation的形式拼回prompt。识别方式分为两种：原生Function Calling（工具调用在独立的tool_calls字段中，结构化JSON可直接取用）；ReAct文本模式（LLM把Thought/Action写在文本里，代码需要从文本中提取函数名和参数）。",
-        "source_doc": "Knowledge/Branch/QA/为什么接入Tool后LLM能调用API"
-    },
-    {
-        "question": "什么是Function Calling的完整流程",
-        "ground_truth": "六步流程：1.定义工具（声明函数名、描述、参数schema）；2.将tools参数传给Chat Completions API；3.模型返回tool_calls而不是直接回答；4.解析tool_calls中的函数名和参数；5.代码执行对应函数获取结果；6.把函数结果以tool role的消息格式追加到对话中，模型基于结果生成最终回答。流式场景下还需要手动处理未完成的tool_calls片段。",
-        "source_doc": "Knowledge/MainLine/Function-Calling"
-    },
-    {
-        "question": "什么是RPC，解决什么问题",
-        "ground_truth": "RPC（Remote Procedure Call，远程过程调用）本质上是一种通信范式，是对网络通信的抽象封装，旨在让调用远程服务上的函数像调用本地函数一样。在RPC出现之前两台机器通信需要开发者手动处理TCP连接、序列化、发送接收解析响应、超时重连等。RPC解决的就是这类与业务逻辑无关的通信机械性工作。核心机制是Stub（桩/代理），客户端的Stub拦截函数调用将函数名和参数序列化成网络消息发给服务端，服务端Stub反序列化后找到对应函数执行并返回。",
-        "source_doc": "Knowledge/Backend/RPC范式与REST架构约束"
-    },
-    {
-        "question": "REST架构的核心约束是什么",
-        "ground_truth": "六条核心约束：客户端-服务器（界面与数据分离）、无状态（每个请求需包含全部所需信息，服务器不保存会话上下文）、可缓存（响应需显式标记是否可缓存）、统一接口（资源通过URI标识，操作通过HTTP动词GET/POST/PUT/DELETE表达）、分层系统（客户端不知道是否经过中间层）、按需代码（可选，服务器可向客户端发送可执行代码）。Restful是口语化称呼，主要指统一接口这条约束的落地：URL对应资源而非动作，HTTP方法对应操作，用HTTP状态码表达结果。",
-        "source_doc": "Knowledge/Backend/RPC范式与REST架构约束"
-    },
-    {
-        "question": "流式响应和非流式响应有什么区别",
-        "ground_truth": "非流式（stream=False）：生成完全部内容后一次性打包发回来，等几秒一次性拿到完整回答，response.choices[0].message.content直接取完整文本。流式（stream=True）：生成一段就发一段，边生成边发，每隔几毫秒收到几个新token。代码层面是一个迭代器，每次yield一小块，需要手动拼接。",
-        "source_doc": "Knowledge/Backend/流式响应"
-    },
-    {
-        "question": "BM25算法是什么，什么时候开启",
-        "ground_truth": "BM25是一种在信息检索领域广泛使用的排名函数，结果是对文档与搜索查询的相关性评估值。在处理词频饱和及文档长度归一化方面表现优秀。两个核心参数：k1控制词频饱和度（默认1.2~2.0），b控制文档长度归一化（默认0.75）。如果文档含大量型号、编号、API名、人名、缩写，值得开启BM25。如果文档全是长篇小说或散文，纯向量检索已经够好，开启BM25反而增加延迟。",
-        "source_doc": "Knowledge/Branch/other/BM25算法"
-    },
-    {
-        "question": "Token是什么",
-        "ground_truth": "Token（词元）是模型'阅读'文本的最小单位。原始文本输入进来时首先被Tokenizer切碎为片段，通过查表将片段分别映射为整数ID，然后去Q矩阵里取第ID行得到一个768维的稠密向量。Word Embedding就是Q矩阵查表后拿到的那个向量，是最终产物。",
-        "source_doc": "Knowledge/Branch/other/token"
-    },
-    {
-        "question": "BGE系列Embedding模型有什么特点",
-        "ground_truth": "BGE（BAAI General Embedding）系列针对中文语言处理首选。BGE-M3：支持100+语种，支持最大8192 token的输入，支持稠密检索、稀疏检索、多重向量。BGE-large-zh-v1.5：专注于中文，效果极佳。使用BGE模型时需要加特定的指令前缀：入库时不需要前缀，查询时需加'为这个句子生成表示以用于检索相关文章'+用户问题。如果忘记加这个前缀检索效果会大打折扣。",
-        "source_doc": "Knowledge/Branch/RAG子环节/Embedding"
-    },
-    {
-        "question": "Embedding模型选型有哪些避坑点",
-        "ground_truth": "三方面需要注意：切片长度问题——有些老模型只支持512token，超出部分会被直接丢弃；指令前缀——有些模型如BGE在生成向量时需要加特定前缀字符串，入库不加查询加，忘记加则检索效果大打折扣；维度大小——维度不是越大越好，维度越大存储越贵检索越慢，百万级以下数据量768维是性价比最高的平衡点。",
-        "source_doc": "Knowledge/Branch/RAG子环节/Embedding"
-    },
-    {
-        "question": "RAGAS框架评估哪些指标",
-        "ground_truth": "主要评估四个核心指标：Faithfulness（忠实度，回答中有没有事实是上下文里没有的，即检测幻觉，LLM将回答拆成原子声明逐条检查是否在上下文中出现）；Answer Relevancy（答案相关性，回答是否切题，LLM从回答反推问题与原始问题算相似度）；Context Precision（上下文精度，检索回来的chunk是否都对回答有用，LLM逐条判断每个chunk是否对回答有用）；Context Recall（上下文召回，应该被检索到的chunk有没有漏，LLM从回答中提取事实逐条检查是否在上下文中出现）。",
-        "source_doc": "Knowledge/MainLine/RAG优化与选型"
-    },
-    {
-        "question": "检索召回有哪些常用评估指标",
-        "ground_truth": "Recall@K（前K个结果中包含正确答案的比例，衡量'找全'的能力，评估召回阶段）；MRR@K（衡量'找到第一个对的有多快'，单答案问答场景）；NDCG@K（考虑位置加权的相关性评分，排名越靠前贡献越大，多级相关性标注）；MAP@K（每个相关文档位置上的Precision平均值，多个正确答案场景）；Hit Rate@K（前K个结果中至少包含一个正确答案的查询占比，粗粒度评估）。",
-        "source_doc": "Knowledge/Branch/RAG子环节/检索召回"
-    },
-    {
-        "question": "分块过大和过小分别有什么问题",
-        "ground_truth": "块过大：语义稀释（包含多个主题导致与任何单一查询相似度都不高）、超出Embedding模型上限（超出部分被截断语义残缺）、浪费LLM上下文窗口、检索噪声高。块过小：语义碎片化（句子碎片无法组成完整答案）、上下文丢失（缺失对象与背景描述）、检索召回不稳定（同一概念信息分散在多个小块中需大量top-k覆盖）、索引开销剧增（块数量激增向量数据库需分配更多存储空间和更高检索延迟）。",
-        "source_doc": "Knowledge/Branch/RAG子环节/文本分块"
-    },
-    {
-        "question": "什么是Late Chunking，和传统分块有什么区别",
-        "ground_truth": "Late Chunking是Jina AI提出的新范式。传统分块是先分块再对块Embedding，每个chunk在Embedding时看不到全文。Late Chunking是先把整个文档送进Embedding模型生成token级向量，再按设定的分块边界对属于该分块的token向量作mean-pooling得到分块级向量。好处是分块都看过全文包含了全文的上下文信息；缺点是需要长上下文Embedding模型如支持8192token，且成本更高。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
-    },
-    {
-        "question": "实际项目中遇到过哪些分块相关的坑",
-        "ground_truth": "最大的坑是表格处理：文档中有大量嵌套表格，如果直接使用递归字符切分表头和数据会分离，后续检索完全不可用。解决方案是在数据预处理阶段用正则和启发式规则识别表格区域，将表格整体作为一个块并在元数据中注明table类型。第二个坑是中文tokenization：分块大小按字符数和用token数差异很大，最终统一用tiktoken计算token数作为标准。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
-    },
-    {
-        "question": "如何处理包含表格和图片的PDF文档",
-        "ground_truth": "分三步处理：第一步用Unstructured或LlamaParse做布局分析，识别出文本区域、表格区域和图片区域；第二步表格整体作为一个块，图片用多模态模型生成描述文本后作为块；第三步纯文本区域使用递归字符切分器分块处理。最后每个块都注明元数据类型(text/image/table)。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
-    },
-    {
-        "question": "消息队列解决什么问题",
-        "ground_truth": "消息队列本质上将已发生的事实进行通知，让原本紧耦合的直接调用变成松耦合的异步通信。解决三个核心问题：异步（核心业务执行后可立即看到结果只需发消息通知后续非核心链路）、解耦（服务只需在业务完成后发消息到broker不管下游是什么模块）、削峰（大量消息到达Broker服务按自身处理能力慢慢消费不让大量请求直接打到DB）。这也对应了时间解耦、空间解耦和速率解耦。",
-        "source_doc": "RocketMQ"
-    },
-    {
-        "question": "RocketMQ的PushConsumer和SimpleConsumer有什么区别",
-        "ground_truth": "PushConsumer是Broker主动推送消息到Consumer的Listener，默认单线程顺序消费，消息处理时间过长会导致后续消息排队阻塞且Broker超时可能造成重复消费。适用于消息处理时长可预测、无异步处理的场景。SimpleConsumer主动从Broker拉取消息，支持设置长轮询超时和消息不可见时长，适用于消息处理时长无法预估、异步分发、批量消费等场景。SimpleConsumer需要手动ack确认消费，PushConsumer通过监听器返回值确认。",
-        "source_doc": "RocketMQ"
-    },
-    {
-        "question": "RocketMQ的事务消息是如何工作的",
-        "ground_truth": "事务消息解决分布式系统中消息发送与本地事务的原子性问题。流程：生产者开启事务并发送半消息（发送到Broker但标记为不可见消费者拿不到）→执行本地事务→根据本地事务结果commit（半消息变为普通消息对消费者可见）或rollback（半消息被丢弃）。如果服务端在指定时间内无法确认状态，会触发TransactionChecker事务检查器进行被动兜底（超时回查）。RocketMQ只保证消息发送契合实际操作，消息处理失败需消费端自行处理。",
-        "source_doc": "RocketMQ"
-    },
-    {
-        "question": "RocketMQ的顺序消息如何保证顺序性",
-        "ground_truth": "通过MessageGroup判定和识别，相同消息组的多条消息按FIFO顺序发送到同一个队列。生产顺序性：使用单个线程发送或通过setMessageGroup保证同一组内有序。消费顺序性：PushConsumer底层已串行投递；SimpleConsumer需业务方自行保证，做法是按QueueId分组、按offset排序恢复FIFO、逐条处理逐条ACK。注意绝对顺序性在工程上不可行：FIFO主题中一条消息消费失败后阻塞该队列，超过最大重试次数进入死信队列隔离。",
-        "source_doc": "RocketMQ"
-    },
-    {
-        "question": "RocketMQ中Topic是什么",
-        "ground_truth": "Topic（主题）是一组队列的集合，用于管理不同业务类型的消息以实现隔离存储和订阅。Topic name在集群中全局唯一。5.x版本开始每个主题只允许发送一种类型的消息（强制验证），包括NORMAL（普通）、FIFO（顺序）、DELAY（延时）、TRANSACTION（事务）。通过mqadmin updatetopic命令创建或更新。虽然所有消息以主题粒度管理，但实际操作实现是面向队列的。",
-        "source_doc": "RocketMQ"
-    },
-    {
-        "question": "RocketMQ如何解决重复消费问题",
-        "ground_truth": "业务对消息重复消费敏感时需要自行在业务层面去重。方法：确定业务唯一键如msgId或消息唯一标识字段如订单id，消费前判断唯一键在DB中是否存在，不存在则插入并消费否则跳过。也可以使用Redis来保证。需要注意数据库操作的原子性问题。RocketMQ本身不保证Exactly-Once消费语义，只保证At-Least-Once。",
-        "source_doc": "RocketMQ"
-    },
-    {
-        "question": "RocketMQ中如何提高消费速度",
-        "ground_truth": "提高消费并行度：同一ConsumerGroup下增加Consumer实例数量；增加单个Consumer的消费并行线程（PushConsumer使用setConsumptionThreadCount，SimpleConsumer由业务线程自由增加并发）。批量消费：使用SimpleConsumer设置批次大小一次拉取多条消息。优化DB交互：将多次单查询合并为批量查询，多次单插入合并为批量插入。消息堆积时可视情况选择丢弃不重要消息。",
-        "source_doc": "RocketMQ"
-    },
-    {
-        "question": "为什么RAG极度重视文档解析",
-        "ground_truth": "垃圾数据输入只能得到垃圾效果输出。90%的RAG检索失败根源都出在数据预处理阶段。常见文档格式的问题：半结构化的Word文档内嵌图表和OLE嵌入对象；无序版式的PDF文件直接丧失逻辑结构，多栏布局不可直接读取，非文本扫描完全没有字符。",
-        "source_doc": "Knowledge/Branch/QA/为什么RAG极度重视文档解析"
-    },
-    {
-        "question": "什么是ANN近似最近邻搜索，近似在什么地方",
-        "ground_truth": "ANN在不扫描全量向量的前提下，用索引结构快速缩小候选集再在候选集中做精细比较。流程为：候选生成（通过桶/图/量化结构筛选掉大部分不可能相关的数据）→距离计算（只对较小的候选集合计算）→结果保证（结果高概率接近最优）。核心是在召回率、延迟、内存、构建成本之间作最优平衡。",
-        "source_doc": "Knowledge/Branch/RAG子环节/向量数据库"
-    },
-    {
-        "question": "Milvus中一条数据从写入到最佳检索状态的完整路径",
-        "ground_truth": "八步路径：1.Client构造请求调用insert；2.Proxy层接收并路由做参数校验和哈希分配；3.写入请求进入消息队列持久化保障不丢失；4.DataNode从MQ消费写入内存中的Growing Segment（数据已可查询但无索引）；5.Segment达到大小阈值后被标记为Sealed Segment；6.Flush持久化写入对象存储（数据安全落盘此时仍无索引）；7.IndexNode异步构建索引文件写回对象存储；8.QueryNode Load从对象存储加载Segment数据和索引文件到内存，此时数据进入最高效检索状态。",
-        "source_doc": "Knowledge/Branch/RAG子环节/向量数据库"
-    },
-    {
-        "question": "MQE、HyDE、Step-Back三者的核心区别是什么",
-        "ground_truth": "三者解决不同的问题。MQE（多查询扩展）通过生成多个语义等价但表述不同的查询并行检索合并结果，解决同一问题有不同表述方式的语义鸿沟。HyDE（假设文档嵌入）让LLM先生成假设性答案再用该答案检索，用答案找答案，缩小query和文档之间的语义鸿沟。Step-Back（退一步提问）生成更高层次的抽象问题来检索更宏观的背景知识。三者可以整合到统一的扩展检索框架中：扩展（生成多个扩展查询）→检索（并行执行向量检索）→合并（去重和分数排序）。",
-        "source_doc": "Knowledge/Branch/RAG优化子策略/Query改写"
-    },
-    {
-        "question": "分块质量怎么评估",
-        "ground_truth": "三层评估：第一层Recall@k，构建测试集看正确答案是否在top-k结果集中，要求Recall@5大于0.85。第二层语义完整性检查，随机抽查100个块看语义完整性，人工打分平均分需要大于4。第三层端到端评估，通过RAGAS等框架评估最终回答的faithfulness（信任度）和relevancy（相关度）。",
-        "source_doc": "Knowledge/Branch/QA/面试八股/文本分块面试题"
-    }
+  {
+    "question": "SELECT语句各子句的实际执行顺序是什么",
+    "ground_truth": "SELECT语句的实际执行顺序是：FROM（确定数据源）→ WHERE（行级过滤）→ GROUP BY（分组）→ HAVING（分组后过滤）→ SELECT（选择列）→ ORDER BY（排序）→ LIMIT（限制行数）。这与书写顺序不同。",
+    "source_doc": "MySQL 基础",
+    "expected_chunk_ids": [
+      "MySQL 基础:20",
+      "MySQL 基础:24"
+    ],
+    "expected_files": [
+      "MySQL 基础.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "MySQL的四种事务隔离级别分别解决什么并发问题",
+    "ground_truth": "READ UNCOMMITTED（读未提交）不解决任何并发问题；READ COMMITTED（读已提交）解决脏读；REPEATABLE READ（可重复读）解决脏读和不可重复读；SERIALIZABLE（串行化）解决脏读、不可重复读和幻读。InnoDB默认隔离级别是REPEATABLE READ。",
+    "source_doc": "MySQL 基础",
+    "expected_chunk_ids": [
+      "MySQL 基础:61",
+      "MySQL 基础:62"
+    ],
+    "expected_files": [
+      "MySQL 基础.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "MySQL联合索引的最左前缀法则是什么，跳过最左列会怎样",
+    "ground_truth": "最左前缀法则规定：联合索引只有从最左侧列开始匹配时索引才生效。如果跳过最左列直接查询后续列，索引会失效走全表扫描。例如联合索引(a,b,c)，查询条件只有b和c时索引不生效。",
+    "source_doc": "MySQL-进阶",
+    "expected_chunk_ids": [
+      "MySQL-进阶:18"
+    ],
+    "expected_files": [
+      "MySQL-进阶.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "InnoDB的行锁、间隙锁和临键锁之间是什么关系",
+    "ground_truth": "行锁（Record Lock）锁定单个索引记录；间隙锁（Gap Lock）锁定索引记录之间的间隙，防止插入；临键锁（Next-Key Lock）是行锁+间隙锁的组合，锁定一个索引记录及其前面的间隙。InnoDB在REPEATABLE READ下默认使用临键锁来防止幻读。",
+    "source_doc": "MySQL-进阶",
+    "expected_chunk_ids": [
+      "MySQL-进阶:72",
+      "MySQL-进阶:73"
+    ],
+    "expected_files": [
+      "MySQL-进阶.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "MVCC如何利用ReadView、undo log和隐藏列实现非阻塞读",
+    "ground_truth": "MVCC通过三个机制协作：隐藏列（DB_TRX_ID、DB_ROLL_PTR、DB_ROW_ID）记录行版本信息；undo log保存修改前的旧版本形成版本链；ReadView记录当前活跃事务列表。读取时通过比较事务ID与ReadView中的阈值，沿版本链找到可见版本，实现不加锁的读。",
+    "source_doc": "MySQL-进阶",
+    "expected_chunk_ids": [
+      "MySQL-进阶:88",
+      "MySQL-进阶:89",
+      "MySQL-进阶:90"
+    ],
+    "expected_files": [
+      "MySQL-进阶.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "PostgreSQL的Database与Schema层级设计与MySQL有何不同，为什么适合多租户",
+    "ground_truth": "PostgreSQL的结构是Instance→Database→Schema→Table，一个Database下可以有多个Schema；MySQL中Database和Schema是等价的。PostgreSQL的Schema天然提供命名空间隔离，多租户可以在同一Database下为每个租户分配独立Schema，共享连接但数据隔离。",
+    "source_doc": "PostgreSQL",
+    "expected_chunk_ids": [
+      "PostgreSQL:1",
+      "PostgreSQL:2",
+      "PostgreSQL:3"
+    ],
+    "expected_files": [
+      "PostgreSQL.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "PostgreSQL中查询JSONB时，->和->>运算符有什么区别",
+    "ground_truth": "->运算符返回JSONB对象（保留JSON类型），可用于链式路径导航；->>运算符返回TEXT字符串。例如data->'info'->>'name'，先用->进入嵌套对象，最后用->>提取为文本。",
+    "source_doc": "PostgreSQL",
+    "expected_chunk_ids": [
+      "PostgreSQL:18"
+    ],
+    "expected_files": [
+      "PostgreSQL.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "PostgreSQL的局部索引是什么，什么场景下最适用",
+    "ground_truth": "局部索引（Partial Index）只对表中满足WHERE条件的行建索引，而非全表所有行。最适用于：大部分查询只关心表中特定子集（如未删除记录WHERE deleted=false）、日志表只查近期数据、状态字段过滤特定值。相比全表索引，体积更小、写入开销更低。",
+    "source_doc": "PostgreSQL",
+    "expected_chunk_ids": [
+      "PostgreSQL:31"
+    ],
+    "expected_files": [
+      "PostgreSQL.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Elasticsearch的倒排索引是什么，与MySQL的正排索引有何区别",
+    "ground_truth": "倒排索引（Inverted Index）以词条为key，value是该词条出现在哪些文档中，适合关键词全文搜索。MySQL的正排索引（如B+Tree）以行记录为key，通过索引列值定位行，适合精确匹配和范围查询。倒排索引面向搜索场景，正排索引面向OLTP场景。",
+    "source_doc": "ElasticSearch",
+    "expected_chunk_ids": [
+      "ElasticSearch:1",
+      "ElasticSearch:2"
+    ],
+    "expected_files": [
+      "ElasticSearch.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "ELK技术栈由哪些组件组成，各自承担什么角色",
+    "ground_truth": "ELK由四个组件组成：Elasticsearch负责分布式存储和全文检索；Logstash负责数据采集、解析和转换后输出到ES；Kibana提供可视化图表和仪表盘；Beats是轻量级数据采集器部署在各节点上，替代Logstash承担采集端角色。",
+    "source_doc": "ElasticSearch",
+    "expected_chunk_ids": [
+      "ElasticSearch:0"
+    ],
+    "expected_files": [
+      "ElasticSearch.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "RocketMQ中PushConsumer和SimpleConsumer有什么区别，各自适合什么场景",
+    "ground_truth": "PushConsumer封装了复杂的消费逻辑，服务端主动推送消息到客户端，简化代码但灵活性受限，适合标准消费场景。SimpleConsumer由用户自行控制拉取和提交，需要手动管理offset和负载均衡，更加灵活，适合对消费流程有定制需求的场景。",
+    "source_doc": "RocketMQ",
+    "expected_chunk_ids": [
+      "RocketMQ:2",
+      "RocketMQ:3"
+    ],
+    "expected_files": [
+      "RocketMQ.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "RocketMQ的事务消息中，半消息是什么，TransactionChecker的作用是什么",
+    "ground_truth": "半消息（Half Message）是发送方先发送到Broker但此时对消费者不可见的消息。TransactionChecker是一个回调接口，Broker在未收到发送方的事务状态确认时，会定期回调TransactionChecker查询本地事务执行状态，据此决定消息是提交（对消费者可见）还是回滚（删除）。",
+    "source_doc": "RocketMQ",
+    "expected_chunk_ids": [
+      "RocketMQ:49",
+      "RocketMQ:50"
+    ],
+    "expected_files": [
+      "RocketMQ.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "RocketMQ中消息粒度和队列粒度的负载均衡有什么区别",
+    "ground_truth": "消息粒度负载均衡（Message-level）以消息为单位分配，每个消费者拉取不同消息，负载均衡更精细但消费者可能频繁竞争。队列粒度负载均衡（Queue-level）以队列为单位分配，一个队列只被一个消费者持有，顺序消费更可靠。两者在消费者数量变化时的rebalance行为不同。",
+    "source_doc": "RocketMQ",
+    "expected_chunk_ids": [
+      "RocketMQ:41",
+      "RocketMQ:42",
+      "RocketMQ:43"
+    ],
+    "expected_files": [
+      "RocketMQ.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "REST的六条核心架构约束分别是什么",
+    "ground_truth": "REST的六条架构约束是：客户端-服务器（Client-Server）分离关注点；无状态（Stateless）每次请求包含全部信息；缓存（Cache）标记响应可缓存性；统一接口（Uniform Interface）标准化资源标识和操作；分层系统（Layered System）组件只能看到直接交互层；按需代码（Code-On-Demand）可选的客户端脚本下载。",
+    "source_doc": "RPC范式与REST架构约束",
+    "expected_chunk_ids": [
+      "RPC范式与REST架构约束:1",
+      "RPC范式与REST架构约束:2"
+    ],
+    "expected_files": [
+      "RPC范式与REST架构约束.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "RPC中的Stub是什么，客户端和服务端的Stub各自扮演什么角色",
+    "ground_truth": "Stub（桩）是RPC框架自动生成的代理层。客户端Stub负责将本地方法调用封装为网络请求进行序列化；服务端Stub负责将网络请求反序列化并分发给对应的本地方法。Stub使得远程调用对开发者看起来像本地调用一样。",
+    "source_doc": "RPC范式与REST架构约束",
+    "expected_chunk_ids": [
+      "RPC范式与REST架构约束:0",
+      "RPC范式与REST架构约束:1"
+    ],
+    "expected_files": [
+      "RPC范式与REST架构约束.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "面向对象编程的四个基本特征是什么，各自解决什么问题",
+    "ground_truth": "封装将数据和操作封装为对象，隐藏内部实现暴露对外接口，管理复杂度。继承允许子类复用父类的属性和方法，实现代码重用。多态允许同一接口调用不同的实现，处理变化的业务需求。抽象提取共同特征忽略无关细节，隔离变化。这四个特征共同构成OOP的基础。",
+    "source_doc": "三大编程范式",
+    "expected_chunk_ids": [
+      "三大编程范式:4",
+      "三大编程范式:5"
+    ],
+    "expected_files": [
+      "三大编程范式.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "函数式编程中闭包是什么，与面向对象中的对象有何类比关系",
+    "ground_truth": "闭包是函数加上它捕获的外部变量绑定，携带了创建时的上下文。闭包可以看作是对面向对象中对象的替代：闭包是带有数据的行为，对象是带有行为的数据。对象的多方法对应函数的多个操作参数，两者在表达能力上等价。",
+    "source_doc": "三大编程范式",
+    "expected_chunk_ids": [
+      "三大编程范式:6",
+      "三大编程范式:7"
+    ],
+    "expected_files": [
+      "三大编程范式.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "HTTP流式响应与非流式响应的本质区别是什么",
+    "ground_truth": "非流式响应（stream=False）一次加载全部响应内容到内存再处理，延迟高但内容完整。流式响应（stream=True）逐块接收响应数据，不等待全部内容到达就开始处理，降低首字节延迟，适合大文件传输、实时数据推送和LLM token-by-token输出场景。",
+    "source_doc": "流式响应",
+    "expected_chunk_ids": [
+      "流式响应:0"
+    ],
+    "expected_files": [
+      "流式响应.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "SpringBoot的两大核心机制是什么，分别解决了什么问题",
+    "ground_truth": "SpringBoot两大核心机制：自动配置（Auto-Configuration）根据classpath中的jar包自动配置Spring组件，减少手动编写XML和Java配置；起步依赖（Starter）将一组常用依赖打包为单个依赖坐标，简化版本管理和依赖声明。两者共同实现了开箱即用。",
+    "source_doc": "Java/SpringBoot",
+    "expected_chunk_ids": [
+      "Java/SpringBoot:0",
+      "Java/SpringBoot:1"
+    ],
+    "expected_files": [
+      "SpringBoot.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "SpringBoot中@ConfigurationProperties与@Configuration配置类之间是什么关系",
+    "ground_truth": "@ConfigurationProperties负责从配置文件（如application.yml）中读取并绑定配置值到Java对象，是数据绑定层。@Configuration标注的配置类负责创建和装配Spring Bean，是Bean定义层。二者协作时，@EnableConfigurationProperties将配置属性类的绑定结果注入配置类中，再由配置类通过Bean方法提供出去。",
+    "source_doc": "Java/SpringBoot",
+    "expected_chunk_ids": [
+      "Java/SpringBoot:49",
+      "Java/SpringBoot:50"
+    ],
+    "expected_files": [
+      "SpringBoot.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "SpringBoot自动配置的六个步骤是什么",
+    "ground_truth": "1.引入Starter依赖；2.AutoConfigurationImportSelector扫描META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports文件；3.加载候选自动配置类的全限定名列表；4.通过Conditional条件注解（如@ConditionalOnClass、@ConditionalOnMissingBean）过滤出实际生效的配置类；5.生效的配置类通过@Bean方法创建并注入默认组件；6.如用户自定义了同名Bean，自动配置的Bean被覆盖。",
+    "source_doc": "Java/SpringBoot",
+    "expected_chunk_ids": [
+      "Java/SpringBoot:46"
+    ],
+    "expected_files": [
+      "SpringBoot.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "JVM的五大运行时数据区是什么，哪些是线程私有的，哪些是共享的",
+    "ground_truth": "五大数据区：程序计数器（PC Register）、Java虚拟机栈（VM Stack）、本地方法栈（Native Method Stack）是线程私有的。堆（Heap）和方法区（Method Area，JDK8后为Metaspace）是线程共享的。程序计数器记录当前线程执行位置，虚拟机栈存储方法调用的栈帧。",
+    "source_doc": "Java/JVM",
+    "expected_chunk_ids": [
+      "Java/JVM:0",
+      "Java/JVM:1",
+      "Java/JVM:2",
+      "Java/JVM:3",
+      "Java/JVM:4"
+    ],
+    "expected_files": [
+      "JVM.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Java类加载的双亲委派模型是什么机制，它的三个主要目的是什么",
+    "ground_truth": "双亲委派模型（Bipartite Delegation）：一个类加载器收到类加载请求时，先委托父加载器加载，父加载器无法找到该类时才自己尝试加载。三个目的：避免类的重复加载、防止核心API（如java.lang.Object）被篡改、保证类的安全性。该模型定义了Bootstrap→Extension/Platform→Application三条类加载器链路。",
+    "source_doc": "Java/JVM",
+    "expected_chunk_ids": [
+      "Java/JVM:46",
+      "Java/JVM:50",
+      "Java/JVM:51",
+      "Java/JVM:52"
+    ],
+    "expected_files": [
+      "JVM.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Minor GC、Major GC和Full GC分别在什么范围触发，有什么区别",
+    "ground_truth": "Minor GC发生在新生代，当Eden区满时触发，回收Eden和Survivor区中的无用对象，频率高但速度快。Major GC发生在老年代，当老年代空间不足时触发，通常伴随至少一次Minor GC。Full GC清理整个堆和方法区（Metaspace），STW时间长，对应用影响最大，应尽量避免频繁触发。",
+    "source_doc": "Java/JVM",
+    "expected_chunk_ids": [
+      "Java/JVM:82"
+    ],
+    "expected_files": [
+      "JVM.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "ThreadPoolExecutor中的Worker线程是如何持续从BlockingQueue中取任务的",
+    "ground_truth": "Worker类实现了Runnable接口，内部维护一个Thread引用。Worker启动后进入runWorker()方法，在一个while循环中反复调用getTask()从BlockingQueue中拉取任务。没有任务时BlockingQueue的poll()或take()让Worker阻塞等待，有任务时立即或超时后取出执行。取出null时Worker退出循环。",
+    "source_doc": "Java/线程池技术",
+    "expected_chunk_ids": [
+      "Java/线程池技术:0",
+      "Java/线程池技术:1"
+    ],
+    "expected_files": [
+      "线程池技术.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "线程池中的线程是饿汉式创建还是懒汉式创建",
+    "ground_truth": "懒汉式创建。核心线程也并非在创建线程池时就全部创建好，而是在提交任务时才按需创建。当提交任务时如果当前运行线程数小于corePoolSize，则创建新线程来执行。只有调用了prestartAllCoreThreads()方法才会在创建线程池后立即创建所有核心线程。",
+    "source_doc": "Java/线程池技术",
+    "expected_chunk_ids": [
+      "Java/线程池技术:0",
+      "Java/线程池技术:1"
+    ],
+    "expected_files": [
+      "线程池技术.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "CPU密集型任务和IO密集型任务的线程数经验公式分别是什么",
+    "ground_truth": "CPU密集型：核心线程数 = CPU核心数 + 1，加1是为了利用线程等待IO时的CPU空闲间隙。IO密集型：核心线程数 = CPU核心数 × (1 + IO等待时间/CPU计算时间)，或简化为CPU核心数 × 2。但经验公式只是起点，最终需要压测验证实际最优值。",
+    "source_doc": "Java/线程池参数设置决策",
+    "expected_chunk_ids": [
+      "Java/线程池参数设置决策:0"
+    ],
+    "expected_files": [
+      "线程池参数设置决策.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "线程数量增加超过最优解后，吞吐量和延迟分别怎样变化",
+    "ground_truth": "当线程数超过最优解后，吞吐量不再上升甚至下降，因为过多的线程竞争CPU和锁资源导致上下文切换开销增大。延迟持续上升，因为每个线程分到的时间片更少，任务排队等待时间变长。",
+    "source_doc": "Java/线程池参数设置决策",
+    "expected_chunk_ids": [
+      "Java/线程池参数设置决策:0"
+    ],
+    "expected_files": [
+      "线程池参数设置决策.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "OpenFeign一次调用从方法调用到实际HTTP请求经历了哪三步链路",
+    "ground_truth": "第一步：OpenFeign将接口方法的@FeignClient声明生成为JDK动态代理对象，拦截方法调用。第二步：通过集成的LoadBalancer从Nacos注册中心获取服务实例列表并做负载均衡选择目标地址。第三步：底层HTTP Client（如Apache HttpClient或OkHttp）根据选择的目标地址发送HTTP请求并接收响应。",
+    "source_doc": "Java/OpenFeign",
+    "expected_chunk_ids": [
+      "Java/OpenFeign:0"
+    ],
+    "expected_files": [
+      "OpenFeign.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "阻塞式编程中并发的上限由什么决定",
+    "ground_truth": "由线程数量决定。每个请求独占一个线程，线程在IO等待时被阻塞，整个线程虽不消耗CPU但占用内存（约1MB栈空间）。线程数有物理上限，所以并发量也受限于线程数。",
+    "source_doc": "Java/阻塞式编程",
+    "expected_chunk_ids": [
+      "Java/阻塞式编程:0"
+    ],
+    "expected_files": [
+      "阻塞式编程.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "响应式编程为什么没有理论的并发上限",
+    "ground_truth": "响应式编程不绑定线程与请求（one-thread-per-request），请求在等待IO时线程被释放去处理其他请求。整个系统只需少量线程就支撑海量并发，并发上限由CPU和内存资源决定而非线程池大小。",
+    "source_doc": "Java/响应式编程",
+    "expected_chunk_ids": [
+      "Java/响应式编程:0"
+    ],
+    "expected_files": [
+      "响应式编程.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "四种导致线程退出CPU执行并触发上下文切换的情况是什么",
+    "ground_truth": "1.时间片耗尽：线程的CPU时间片用完，操作系统强制切换。2.主动阻塞：线程调用sleep()、wait()、join()等方法主动让出CPU。3.IO操作：线程发起IO请求后阻塞等待，让出CPU。4.高优先级抢占：有更高优先级的线程就绪抢占了当前线程的执行权。",
+    "source_doc": "Java/什么是线程上下文切换",
+    "expected_chunk_ids": [
+      "Java/什么是线程上下文切换:0"
+    ],
+    "expected_files": [
+      "什么是线程上下文切换.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Sentinel的三种熔断策略分别用什么阈值来判断",
+    "ground_truth": "慢调用比例（slowRatioThreshold）：当请求中慢调用的比例超过阈值时熔断，默认慢调用定义为响应时间>maxAllowedRt。异常比例（errorRatioThreshold）：当异常请求的比例超过阈值时熔断。异常数（errorCountThreshold）：当一分钟内异常数超过阈值时熔断。三种策略在熔断后都有半开探测恢复机制。",
+    "source_doc": "Java/熔断降级",
+    "expected_chunk_ids": [
+      "Java/熔断降级:0"
+    ],
+    "expected_files": [
+      "熔断降级.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Sentinel的三种QPS流控效果分别是什么",
+    "ground_truth": "直接拒绝（Default）：当QPS超过阈值直接抛出FlowException拒绝请求。Warm Up（预热）：系统启动时允许的QPS从一个较低值逐渐增加到阈值，防止冷系统被突发流量冲垮。匀速排队（Rate Limiter）：严格限制请求通过间隔，使请求以匀速通过，突发流量排队等待。",
+    "source_doc": "Java/流量控制",
+    "expected_chunk_ids": [
+      "Java/流量控制:0",
+      "Java/流量控制:1"
+    ],
+    "expected_files": [
+      "流量控制.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Sentinel的关联流控是什么场景下使用",
+    "ground_truth": "关联流控控制的是关联资源。当一个资源的访问量达到阈值时，限制另一个关联资源的访问，而非限制自己。典型场景：数据库的读接口和写接口是关联关系，写操作压力大时自动限制读操作以保护数据库。还有支付下单和查看订单列表的关联场景。",
+    "source_doc": "Java/流量控制",
+    "expected_chunk_ids": [
+      "Java/流量控制:0"
+    ],
+    "expected_files": [
+      "流量控制.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Python协程的本质是什么，它与普通函数的核心区别在哪",
+    "ground_truth": "协程本质上是一个可挂起、可恢复的状态机（suspendable/resumable state machine），而非普通函数的一次性执行。协程通过await主动让出控制权给事件循环而非被操作系统抢占，挂起时保存当前执行状态，恢复时从挂起点继续执行。这是协作式多任务而非抢占式。",
+    "source_doc": "Python/协程",
+    "expected_chunk_ids": [
+      "Python/协程:0"
+    ],
+    "expected_files": [
+      "协程.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "为什么两个连续的await语句之间是天然原子的，不会有竞态条件",
+    "ground_truth": "协程只在await点主动让出控制权，在两个await之间没有await时协程不会意外中断，因此这段时间内的操作是不可分割的原子操作。但注意这仅适用于单线程事件循环下的协程，如果有多个线程各自运行事件循环则不成立。",
+    "source_doc": "Python/协程",
+    "expected_chunk_ids": [
+      "Python/协程:0"
+    ],
+    "expected_files": [
+      "协程.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Python中@语法糖在函数定义上方实际翻译成什么代码",
+    "ground_truth": "@decorator在函数定义上方等价于：func = decorator(func)。装饰器是一个接受函数对象并返回新函数对象的可调用对象。@decorator(args)等价于func = decorator(args)(func)，即decorator(args)先返回装饰器函数，再用这个装饰器包装原函数。",
+    "source_doc": "Python/装饰器",
+    "expected_chunk_ids": [
+      "Python/装饰器:0"
+    ],
+    "expected_files": [
+      "装饰器.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "自定义装饰器时functools.wraps装饰器的作用是什么",
+    "ground_truth": "wraps将原函数的元信息（__name__、__doc__、__module__等）复制到装饰后的wrapper函数上。不加wraps时，被装饰后的函数名会变为wrapper，导致函数签名丢失和文档混乱；加了之后函数名和文档保持为原函数的信息。",
+    "source_doc": "Python/装饰器",
+    "expected_chunk_ids": [
+      "Python/装饰器:0",
+      "Python/装饰器:1"
+    ],
+    "expected_files": [
+      "装饰器.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Python闭包形成的三个条件是什么",
+    "ground_truth": "1.存在嵌套函数（内部函数定义在外部函数之内）；2.内部函数引用了外部函数的变量（非全局变量）；3.外部函数返回了内部函数（将这个嵌套函数作为返回值传递出去）。三个条件缺一不可。",
+    "source_doc": "Python/闭包",
+    "expected_chunk_ids": [
+      "Python/闭包:0"
+    ],
+    "expected_files": [
+      "闭包.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "在实现层面，Python如何在外层函数返回后仍然保留被捕获的外部变量",
+    "ground_truth": "Python在每个函数对象上维护__closure__属性，这是一个元组，包含一组cell对象。每个cell对象存储一个被捕获的外部变量的当前值。当外层函数返回内层函数时，内层函数的__closure__仍持有这些cell的引用，只要闭包对象存在，cell中的值就不会被GC回收。",
+    "source_doc": "Python/闭包",
+    "expected_chunk_ids": [
+      "Python/闭包:1"
+    ],
+    "expected_files": [
+      "闭包.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Python类型注解与Pydantic BaseModel在验证时机上有何本质区别",
+    "ground_truth": "Python类型注解（PEP 484）是静态的、给IDE和类型检查工具（mypy）看的提示，运行时不做任何验证。Pydantic BaseModel在对象创建时进行运行时验证和自动类型强制转换，验证失败会直接抛ValidationError。类型注解不改变程序行为，BaseModel改变。",
+    "source_doc": "Python/类型注解与BaseModel",
+    "expected_chunk_ids": [
+      "Python/类型注解与BaseModel:0"
+    ],
+    "expected_files": [
+      "类型注解与BaseModel.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "在网关或代理层面，透传是什么意思",
+    "ground_truth": "透传（Transparent Forwarding / Passthrough）指中间节点不解析、不修改数据内容，原样转发给下游。对发送方和接收方来说中间节点是透明的。在代码层面，*args和**kwargs收集所有参数后原样传递给内部函数，实现了调用层面的透明转发。",
+    "source_doc": "Python/透传",
+    "expected_chunk_ids": [
+      "Python/透传:0"
+    ],
+    "expected_files": [
+      "透传.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Python推导式有哪些类型，各自的符号定界是什么",
+    "ground_truth": "列表推导式用方括号[]定界，返回list；集合推导式用花括号{}定界，返回set且自动去重；字典推导式用花括号{}和冒号:定界，key:value格式返回dict；生成器表达式用圆括号()定界，返回generator对象惰性求值。",
+    "source_doc": "Python/推导式",
+    "expected_chunk_ids": [
+      "Python/推导式:0"
+    ],
+    "expected_files": [
+      "推导式.md"
+    ],
+    "expected_pages": []
+  },
+  {
+    "question": "Advanced RAG的三个优化阶段分别是什么，各自用到什么技术",
+    "ground_truth": "Pre-Retrieval（检索前优化）：查询改写、查询扩展、意图识别，将模糊的query转为更精确的检索输入。Retrieval（检索阶段优化）：混合检索（稠密+稀疏）、多路召回、自适应检索。Post-Retrieval（检索后优化）：Reranker重排序、上下文压缩、信息过滤去噪。三个阶段串行构成完整优化链路。",
+    "source_doc": "Agent/RAG前沿架构与高级模式",
+    "expected_chunk_ids": [
+      "Agent/RAG前沿架构与高级模式:0",
+      "Agent/RAG前沿架构与高级模式:1"
+    ],
+    "expected_files": [
+      "RAG前沿架构与高级模式.md"
+    ],
+    "expected_pages": []
+  }
 ]

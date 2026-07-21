@@ -2,8 +2,11 @@
 __pycache__/
 .venv/
 data/
-guide_version*.md
+guide_*.md
 .idea/
 .vector_cache/
 *.png
 history/
+add_up.md
+question_set.md
+units.md
