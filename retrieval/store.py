@@ -20,6 +20,16 @@ class VectorStore:
         self._bm25: BM25Okapi | None = None               # BM25 稀疏索引
         self._bm25_tokenized: List[List[str]] = []        # 已分词的 chunk 文本，与 _chunks 下标对齐
 
+    @property
+    def chunk_ids(self) -> set[str]:
+        """返回库中所有 chunk_id 的集合。"""
+        return {c.chunk_id for c in self._chunks}
+
+    @property
+    def chunks(self) -> List[Chunk]:
+        """返回库中全部 chunk 的只读视图。"""
+        return list(self._chunks)
+
     def add(self, documents: List[Chunk], vectors: List[List[float]]):
         """将 chunk 及其向量追加入库，并重建 BM25 索引"""
         self._chunks.extend(documents)                   # 追加 chunk 到列表末尾
