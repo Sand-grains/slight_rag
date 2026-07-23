@@ -1,6 +1,6 @@
 [
   {
-    "question": "SELECT语句各子句的实际执行顺序是什么",
+    "query": "SELECT语句各子句的实际执行顺序是什么",
     "source_doc": "MySQL 基础",
     "expected_chunk_ids": [
       "MySQL 基础:20",
@@ -22,7 +22,7 @@
     "query_id": "Q0001"
   },
   {
-    "question": "MySQL的四种事务隔离级别分别解决什么并发问题",
+    "query": "MySQL的四种事务隔离级别分别解决什么并发问题",
     "source_doc": "MySQL 基础",
     "expected_chunk_ids": [
       "MySQL 基础:61",
@@ -42,7 +42,7 @@
     "query_id": "Q0002"
   },
   {
-    "question": "MySQL联合索引的最左前缀法则是什么，跳过最左列会怎样",
+    "query": "MySQL联合索引的最左前缀法则是什么，跳过最左列会怎样",
     "source_doc": "MySQL-进阶",
     "expected_chunk_ids": [
       "MySQL-进阶:18"
@@ -60,7 +60,7 @@
     "query_id": "Q0003"
   },
   {
-    "question": "InnoDB的行锁、间隙锁和临键锁之间是什么关系",
+    "query": "InnoDB的行锁、间隙锁和临键锁之间是什么关系",
     "source_doc": "MySQL-进阶",
     "expected_chunk_ids": [
       "MySQL-进阶:72",
@@ -80,7 +80,7 @@
     "query_id": "Q0004"
   },
   {
-    "question": "MVCC如何利用ReadView、undo log和隐藏列实现非阻塞读",
+    "query": "MVCC如何利用ReadView、undo log和隐藏列实现非阻塞读",
     "source_doc": "MySQL-进阶",
     "expected_chunk_ids": [
       "MySQL-进阶:88",
@@ -102,7 +102,7 @@
     "query_id": "Q0005"
   },
   {
-    "question": "PostgreSQL的Database与Schema层级设计与MySQL有何不同，为什么适合多租户",
+    "query": "PostgreSQL的Database与Schema层级设计与MySQL有何不同，为什么适合多租户",
     "source_doc": "PostgreSQL",
     "expected_chunk_ids": [
       "PostgreSQL:1",
@@ -124,7 +124,7 @@
     "query_id": "Q0006"
   },
   {
-    "question": "PostgreSQL中查询JSONB时，->和->>运算符有什么区别",
+    "query": "PostgreSQL中查询JSONB时，->和->>运算符有什么区别",
     "source_doc": "PostgreSQL",
     "expected_chunk_ids": [
       "PostgreSQL:18"
@@ -142,7 +142,7 @@
     "query_id": "Q0007"
   },
   {
-    "question": "PostgreSQL的局部索引是什么，什么场景下最适用",
+    "query": "PostgreSQL的局部索引是什么，什么场景下最适用",
     "source_doc": "PostgreSQL",
     "expected_chunk_ids": [
       "PostgreSQL:31"
@@ -160,7 +160,7 @@
     "query_id": "Q0008"
   },
   {
-    "question": "Elasticsearch的倒排索引是什么，与MySQL的正排索引有何区别",
+    "query": "Elasticsearch的倒排索引是什么，与MySQL的正排索引有何区别",
     "source_doc": "ElasticSearch",
     "expected_chunk_ids": [
       "ElasticSearch:1",
@@ -180,7 +180,7 @@
     "query_id": "Q0009"
   },
   {
-    "question": "ELK技术栈由哪些组件组成，各自承担什么角色",
+    "query": "ELK技术栈由哪些组件组成，各自承担什么角色",
     "source_doc": "ElasticSearch",
     "expected_chunk_ids": [
       "ElasticSearch:0"
@@ -198,7 +198,7 @@
     "query_id": "Q0010"
   },
   {
-    "question": "RocketMQ中PushConsumer和SimpleConsumer有什么区别，各自适合什么场景",
+    "query": "RocketMQ中PushConsumer和SimpleConsumer有什么区别，各自适合什么场景",
     "source_doc": "RocketMQ",
     "expected_chunk_ids": [
       "RocketMQ:2",
@@ -218,7 +218,7 @@
     "query_id": "Q0011"
   },
   {
-    "question": "RocketMQ的事务消息中，半消息是什么，TransactionChecker的作用是什么",
+    "query": "RocketMQ的事务消息中，半消息是什么，TransactionChecker的作用是什么",
     "source_doc": "RocketMQ",
     "expected_chunk_ids": [
       "RocketMQ:49",
@@ -238,7 +238,7 @@
     "query_id": "Q0012"
   },
   {
-    "question": "RocketMQ中消息粒度和队列粒度的负载均衡有什么区别",
+    "query": "RocketMQ中消息粒度和队列粒度的负载均衡有什么区别",
     "source_doc": "RocketMQ",
     "expected_chunk_ids": [
       "RocketMQ:41",
@@ -260,7 +260,7 @@
     "query_id": "Q0013"
   },
   {
-    "question": "REST的六条核心架构约束分别是什么",
+    "query": "REST的六条核心架构约束分别是什么",
     "source_doc": "RPC范式与REST架构约束",
     "expected_chunk_ids": [
       "RPC范式与REST架构约束:1",
@@ -280,7 +280,7 @@
     "query_id": "Q0014"
   },
   {
-    "question": "RPC中的Stub是什么，客户端和服务端的Stub各自扮演什么角色",
+    "query": "RPC中的Stub是什么，客户端和服务端的Stub各自扮演什么角色",
     "source_doc": "RPC范式与REST架构约束",
     "expected_chunk_ids": [
       "RPC范式与REST架构约束:0",
@@ -300,7 +300,7 @@
     "query_id": "Q0015"
   },
   {
-    "question": "面向对象编程的四个基本特征是什么，各自解决什么问题",
+    "query": "面向对象编程的四个基本特征是什么，各自解决什么问题",
     "source_doc": "三大编程范式",
     "expected_chunk_ids": [
       "三大编程范式:4",
@@ -320,7 +320,7 @@
     "query_id": "Q0016"
   },
   {
-    "question": "函数式编程中闭包是什么，与面向对象中的对象有何类比关系",
+    "query": "函数式编程中闭包是什么，与面向对象中的对象有何类比关系",
     "source_doc": "三大编程范式",
     "expected_chunk_ids": [
       "三大编程范式:6",
@@ -340,7 +340,7 @@
     "query_id": "Q0017"
   },
   {
-    "question": "HTTP流式响应与非流式响应的本质区别是什么",
+    "query": "HTTP流式响应与非流式响应的本质区别是什么",
     "source_doc": "流式响应",
     "expected_chunk_ids": [
       "流式响应:0"
@@ -358,7 +358,7 @@
     "query_id": "Q0018"
   },
   {
-    "question": "SpringBoot的两大核心机制是什么，分别解决了什么问题",
+    "query": "SpringBoot的两大核心机制是什么，分别解决了什么问题",
     "source_doc": "Java/SpringBoot",
     "expected_chunk_ids": [
       "Java/SpringBoot:0",
@@ -378,7 +378,7 @@
     "query_id": "Q0019"
   },
   {
-    "question": "SpringBoot中@ConfigurationProperties与@Configuration配置类之间是什么关系",
+    "query": "SpringBoot中@ConfigurationProperties与@Configuration配置类之间是什么关系",
     "source_doc": "Java/SpringBoot",
     "expected_chunk_ids": [
       "Java/SpringBoot:49",
@@ -398,7 +398,7 @@
     "query_id": "Q0020"
   },
   {
-    "question": "SpringBoot自动配置的六个步骤是什么",
+    "query": "SpringBoot自动配置的六个步骤是什么",
     "source_doc": "Java/SpringBoot",
     "expected_chunk_ids": [
       "Java/SpringBoot:46"
@@ -416,7 +416,7 @@
     "query_id": "Q0021"
   },
   {
-    "question": "JVM的五大运行时数据区是什么，哪些是线程私有的，哪些是共享的",
+    "query": "JVM的五大运行时数据区是什么，哪些是线程私有的，哪些是共享的",
     "source_doc": "Java/JVM",
     "expected_chunk_ids": [
       "Java/JVM:0",
@@ -442,7 +442,7 @@
     "query_id": "Q0022"
   },
   {
-    "question": "Java类加载的双亲委派模型是什么机制，它的三个主要目的是什么",
+    "query": "Java类加载的双亲委派模型是什么机制，它的三个主要目的是什么",
     "source_doc": "Java/JVM",
     "expected_chunk_ids": [
       "Java/JVM:46",
@@ -466,7 +466,7 @@
     "query_id": "Q0023"
   },
   {
-    "question": "Minor GC、Major GC和Full GC分别在什么范围触发，有什么区别",
+    "query": "Minor GC、Major GC和Full GC分别在什么范围触发，有什么区别",
     "source_doc": "Java/JVM",
     "expected_chunk_ids": [
       "Java/JVM:82",
@@ -486,7 +486,7 @@
     "query_id": "Q0024"
   },
   {
-    "question": "ThreadPoolExecutor中的Worker线程是如何持续从BlockingQueue中取任务的",
+    "query": "ThreadPoolExecutor中的Worker线程是如何持续从BlockingQueue中取任务的",
     "source_doc": "Java/线程池技术",
     "expected_chunk_ids": [
       "Java/线程池技术:0",
@@ -506,7 +506,7 @@
     "query_id": "Q0025"
   },
   {
-    "question": "线程池中的线程是饿汉式创建还是懒汉式创建",
+    "query": "线程池中的线程是饿汉式创建还是懒汉式创建",
     "source_doc": "Java/线程池技术",
     "expected_chunk_ids": [
       "Java/线程池技术:0",
@@ -526,7 +526,7 @@
     "query_id": "Q0026"
   },
   {
-    "question": "CPU密集型任务和IO密集型任务的线程数经验公式分别是什么",
+    "query": "CPU密集型任务和IO密集型任务的线程数经验公式分别是什么",
     "source_doc": "Java/线程池参数设置决策",
     "expected_chunk_ids": [
       "Java/线程池参数设置决策:0"
@@ -544,7 +544,7 @@
     "query_id": "Q0027"
   },
   {
-    "question": "线程数量增加超过最优解后，吞吐量和延迟分别怎样变化",
+    "query": "线程数量增加超过最优解后，吞吐量和延迟分别怎样变化",
     "source_doc": "Java/线程池参数设置决策",
     "expected_chunk_ids": [
       "Java/线程池参数设置决策:0"
@@ -562,7 +562,7 @@
     "query_id": "Q0028"
   },
   {
-    "question": "OpenFeign一次调用从方法调用到实际HTTP请求经历了哪三步链路",
+    "query": "OpenFeign一次调用从方法调用到实际HTTP请求经历了哪三步链路",
     "source_doc": "Java/OpenFeign",
     "expected_chunk_ids": [
       "Java/OpenFeign:0"
@@ -580,7 +580,7 @@
     "query_id": "Q0029"
   },
   {
-    "question": "阻塞式编程中并发的上限由什么决定",
+    "query": "阻塞式编程中并发的上限由什么决定",
     "source_doc": "Java/阻塞式编程",
     "expected_chunk_ids": [
       "Java/阻塞式编程:0"
@@ -598,7 +598,7 @@
     "query_id": "Q0030"
   },
   {
-    "question": "响应式编程为什么没有理论的并发上限",
+    "query": "响应式编程为什么没有理论的并发上限",
     "source_doc": "Java/响应式编程",
     "expected_chunk_ids": [
       "Java/响应式编程:0"
@@ -616,7 +616,7 @@
     "query_id": "Q0031"
   },
   {
-    "question": "四种导致线程退出CPU执行并触发上下文切换的情况是什么",
+    "query": "四种导致线程退出CPU执行并触发上下文切换的情况是什么",
     "source_doc": "Java/什么是线程上下文切换",
     "expected_chunk_ids": [
       "Java/什么是线程上下文切换:0"
@@ -634,7 +634,7 @@
     "query_id": "Q0032"
   },
   {
-    "question": "Sentinel的三种熔断策略分别用什么阈值来判断",
+    "query": "Sentinel的三种熔断策略分别用什么阈值来判断",
     "source_doc": "Java/熔断降级",
     "expected_chunk_ids": [
       "Java/熔断降级:0"
@@ -652,7 +652,7 @@
     "query_id": "Q0033"
   },
   {
-    "question": "Sentinel的三种QPS流控效果分别是什么",
+    "query": "Sentinel的三种QPS流控效果分别是什么",
     "source_doc": "Java/流量控制",
     "expected_chunk_ids": [
       "Java/流量控制:0",
@@ -672,7 +672,7 @@
     "query_id": "Q0034"
   },
   {
-    "question": "Sentinel的关联流控是什么场景下使用",
+    "query": "Sentinel的关联流控是什么场景下使用",
     "source_doc": "Java/流量控制",
     "expected_chunk_ids": [
       "Java/流量控制:0",
@@ -692,7 +692,7 @@
     "query_id": "Q0035"
   },
   {
-    "question": "Python协程的本质是什么，它与普通函数的核心区别在哪",
+    "query": "Python协程的本质是什么，它与普通函数的核心区别在哪",
     "source_doc": "Python/协程",
     "expected_chunk_ids": [
       "Python/协程:0"
@@ -710,7 +710,7 @@
     "query_id": "Q0036"
   },
   {
-    "question": "为什么两个连续的await语句之间是天然原子的，不会有竞态条件",
+    "query": "为什么两个连续的await语句之间是天然原子的，不会有竞态条件",
     "source_doc": "Python/协程",
     "expected_chunk_ids": [
       "Python/协程:0"
@@ -728,7 +728,7 @@
     "query_id": "Q0037"
   },
   {
-    "question": "Python中@语法糖在函数定义上方实际翻译成什么代码",
+    "query": "Python中@语法糖在函数定义上方实际翻译成什么代码",
     "source_doc": "Python/装饰器",
     "expected_chunk_ids": [
       "Python/装饰器:0"
@@ -746,7 +746,7 @@
     "query_id": "Q0038"
   },
   {
-    "question": "自定义装饰器时functools.wraps装饰器的作用是什么",
+    "query": "自定义装饰器时functools.wraps装饰器的作用是什么",
     "source_doc": "Python/装饰器",
     "expected_chunk_ids": [
       "Python/装饰器:0",
@@ -766,7 +766,7 @@
     "query_id": "Q0039"
   },
   {
-    "question": "Python闭包形成的三个条件是什么",
+    "query": "Python闭包形成的三个条件是什么",
     "source_doc": "Python/闭包",
     "expected_chunk_ids": [
       "Python/闭包:0"
@@ -784,7 +784,7 @@
     "query_id": "Q0040"
   },
   {
-    "question": "在实现层面，Python如何在外层函数返回后仍然保留被捕获的外部变量",
+    "query": "在实现层面，Python如何在外层函数返回后仍然保留被捕获的外部变量",
     "source_doc": "Python/闭包",
     "expected_chunk_ids": [
       "Python/闭包:1"
@@ -802,7 +802,7 @@
     "query_id": "Q0041"
   },
   {
-    "question": "Python类型注解与Pydantic BaseModel在验证时机上有何本质区别",
+    "query": "Python类型注解与Pydantic BaseModel在验证时机上有何本质区别",
     "source_doc": "Python/类型注解与BaseModel",
     "expected_chunk_ids": [
       "Python/类型注解与BaseModel:0"
@@ -820,7 +820,7 @@
     "query_id": "Q0042"
   },
   {
-    "question": "在网关或代理层面，透传是什么意思",
+    "query": "在网关或代理层面，透传是什么意思",
     "source_doc": "Python/透传",
     "expected_chunk_ids": [
       "Python/透传:0"
@@ -838,7 +838,7 @@
     "query_id": "Q0043"
   },
   {
-    "question": "Python推导式有哪些类型，各自的符号定界是什么",
+    "query": "Python推导式有哪些类型，各自的符号定界是什么",
     "source_doc": "Python/推导式",
     "expected_chunk_ids": [
       "Python/推导式:0"
@@ -856,7 +856,7 @@
     "query_id": "Q0044"
   },
   {
-    "question": "Advanced RAG的三个优化阶段分别是什么，各自用到什么技术",
+    "query": "Advanced RAG的三个优化阶段分别是什么，各自用到什么技术",
     "source_doc": "Agent/RAG前沿架构与高级模式",
     "expected_chunk_ids": [
       "Agent/RAG前沿架构与高级模式:0",
