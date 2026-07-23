@@ -2,7 +2,7 @@
 __pycache__/
 .venv/
 data/
-guide_*.md
+guide/
 .idea/
 .vector_cache/
 *.png
@@ -10,3 +10,4 @@ history/
 add_up.md
 question_set.md
 units.md
+eval/results/
