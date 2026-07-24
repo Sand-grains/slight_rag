@@ -1,7 +1,8 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()  # 从项目根目录的 .env 文件中加载环境变量到 os.environ
+load_dotenv(Path(__file__).resolve().parent / ".env")  # 基于 config.py 自身位置定位 .env, 不依赖 CWD
 
 # DeepSeek API 配置，从 .env 读取
 LLM_API_KEY = os.getenv("LLM_API_KEY")        # API 密钥
