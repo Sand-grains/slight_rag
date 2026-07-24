@@ -1,14 +1,15 @@
+.idea/
+# Virtual environments
 .env
-__pycache__/
 .venv/
+.vector_cache/
+__pycache__/
 data/
 guide/
-.idea/
-.vector_cache/
-*.png
 history/
+eval/results/
+slight_rag.egg-info.egg-info/
 add_up.md
 question_set.md
 units.md
-eval/results/
-slight_rag.egg-info.egg-info/
+*.png
