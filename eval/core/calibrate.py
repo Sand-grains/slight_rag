@@ -16,15 +16,16 @@ from retrieval.store import VectorStore
 from retrieval.retriever import Retriever
 from retrieval.generator import Generator
 from eval.core.benchmark import load_benchmark
-from eval.core.llm_as_judge import run_judge, compute_verdict
+from eval.core.llm_as_judge import run_judge, execute_verdict
 from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID
 
 CALIBRATION_SAMPLES = 5
 MAX_ITERATIONS = 3
 
 
-def _make_hallucinated_answer(good_answer: str, query: str) -> str:
-    """类型 A：用 LLM 基于好答案生成一个注入了事实错误的版本。"""
+def _make_hallucination(good_answer: str, query: str) -> str:
+    """类型 A: 注入幻觉
+    用 LLM 基于好答案生成一个注入了事实错误的版本。"""
     # 简单策略：在好答案中替换关键术语
     swaps = [
         ("MySQL", "PostgreSQL"),
@@ -44,8 +45,9 @@ def _make_hallucinated_answer(good_answer: str, query: str) -> str:
     return bad
 
 
-def _collect_wrong_chunks(store: VectorStore, query: str, retriever: Retriever) -> list:
-    """类型 B：检索到正确 chunk 后，故意替换为不相关的 chunk。"""
+def _inject_wrong_chunks(store: VectorStore, query: str, retriever: Retriever) -> list:
+    """类型 B: 错误chunk注入
+    检索到正确 chunk 后，故意替换为不相关的 chunk。"""
     correct = retriever.retrieve(query, top_k=TOP_K)
     correct_ids = {c.chunk_id for c in correct}
 
@@ -59,7 +61,7 @@ def _collect_wrong_chunks(store: VectorStore, query: str, retriever: Retriever) 
     return wrong if wrong else correct
 
 
-def run_calibration() -> dict:
+def run_calibrate() -> dict:
     """执行校准流程，返回校准报告。"""
     store = VectorStore.vector_restore()
     if store is None:
@@ -87,10 +89,10 @@ def run_calibration() -> dict:
             print(f"    good answer: {answer[:80]}...")
 
             # 坏答案 A：注入幻觉
-            bad_a = _make_hallucinated_answer(answer, item.query)
+            bad_a = _make_hallucination(answer, item.query)
 
             # 坏答案 B：错误 context
-            wrong_chunks = _collect_wrong_chunks(store, item.query, retriever)
+            wrong_chunks = _inject_wrong_chunks(store, item.query, retriever)
             bad_b = Generator(model=LLM_MODEL_ID).generate(item.query, wrong_chunks)
             print(f"    bad (type A): {bad_a[:80]}...")
             print(f"    bad (type B): {bad_b[:80]}...")
@@ -153,7 +155,7 @@ def run_calibration() -> dict:
 
 
 if __name__ == "__main__":
-    report = run_calibration()
+    report = run_calibrate()
     ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     path = f"eval/results/calibrate_{ts}.json"
     with open(path, "w", encoding="utf-8") as f:

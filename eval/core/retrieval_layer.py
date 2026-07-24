@@ -36,7 +36,7 @@ class RetrievalEvalResult:
 
 
 @dataclass
-class Layer1Output:
+class LayerOutput:
     """Layer 1 完整输出。"""
     results: list[RetrievalEvalResult]
     aggregate: dict  # 全局聚合指标
@@ -47,18 +47,18 @@ class Layer1Output:
 CANDIDATE_K = TOP_K * 2
 
 
-def run_layer1(retriever: Retriever, items: list[BenchmarkItem]) -> Layer1Output:
+def run_retrieval_eval(retriever: Retriever, items: list[BenchmarkItem]) -> LayerOutput:
     """执行 Layer 1 检索评估，含两轮 low_precision 判定。
 
     Returns:
-        Layer1Output: 包含逐 query 结果、聚合指标、分组统计。
+        LayerOutput: 包含逐 query 结果、聚合指标、分组统计。
     """
     results = _first_pass(retriever, items)
     results = _second_pass_low_precision(results)
     aggregate = _aggregate(results)
     by_category = _group_by(results, key=lambda r: r.category)
     by_difficulty = _group_by(results, key=lambda r: r.difficulty)
-    return Layer1Output(
+    return LayerOutput(
         results=results,
         aggregate=aggregate,
         by_category=by_category,

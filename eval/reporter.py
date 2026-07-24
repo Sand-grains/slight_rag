@@ -6,10 +6,10 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from eval.core.retrieval_layer import Layer1Output, RetrievalEvalResult
+from eval.core.retrieval_layer import LayerOutput, RetrievalEvalResult
 
 
-def generate_report(output: Layer1Output, results_dir: str, run_info: dict) -> str:
+def generate_report(output: LayerOutput, results_dir: str, run_info: dict) -> str:
     """生成完整eval报告：写入 summary.json / per_query.json / failures.json / run_info.json。
 
     Args:
@@ -72,7 +72,7 @@ def _serialize_result(r: RetrievalEvalResult) -> dict:
     }
 
 
-def _print_summary(output: Layer1Output):
+def _print_summary(output: LayerOutput):
     """终端打印聚合结果。"""
     agg = output.aggregate
     if not agg:
@@ -95,7 +95,7 @@ def _print_summary(output: Layer1Output):
     print("=" * 60 + "\n")
 
 
-def _append_history(results_dir: str, output: Layer1Output):
+def _append_history(results_dir: str, output: LayerOutput):
     """向 history.jsonl 追加一行运行摘要。"""
     from config import TOP_K
     history_dir = os.path.join(os.path.dirname(results_dir), "check")

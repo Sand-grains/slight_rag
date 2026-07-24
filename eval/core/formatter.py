@@ -8,8 +8,8 @@ from indexing.chunk import Chunk
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
-def _load_template(filename: str) -> str:
-    """加载 .md prompt 模板文件。"""
+def _load_prompt(filename: str) -> str:
+    """加载 .md prompt 模板文件"""
     path = _PROMPTS_DIR / filename
     if not path.exists():
         raise FileNotFoundError(f"Prompt 模板不存在: {path}")
@@ -17,7 +17,7 @@ def _load_template(filename: str) -> str:
 
 
 def _fill(template: str, **kwargs) -> str:
-    """用简单字符串替换填充模板（避免 .format() 的 brace 转义问题）。"""
+    """用简单字符串替换填充模板（避免 .format() 的 brace 转义问题）"""
     result = template
     for key, value in kwargs.items():
         result = result.replace("{" + key + "}", str(value))
@@ -25,7 +25,7 @@ def _fill(template: str, **kwargs) -> str:
 
 
 def build_judge_context(chunks: List[Chunk]) -> str:
-    """构建带 chunk_id 的上下文文本，供 Judge 引用。
+    """构建带 chunk_id 的上下文文本，供 Judge 引用
 
     格式: [来源X | chunk_id: <id> | 文档: <name>] content...
     """
@@ -42,11 +42,11 @@ def build_judge_context(chunks: List[Chunk]) -> str:
 
 
 class Formatter:
-    """Prompt 格式化器：加载模板并缓存，按需填充。"""
+    """Prompt 格式化器: 加载模板并缓存，按需填充。"""
 
     def __init__(self):
-        self._faithfulness_tpl = _load_template("faithfulness.md")
-        self._quality_tpl = _load_template("quality.md")
+        self._faithfulness_tpl = _load_prompt("faithfulness.md")
+        self._quality_tpl = _load_prompt("quality.md")
 
     def build_faithfulness_prompt(self, query: str, context_str: str, answer: str) -> str:
         """构建 faithfulness 评估 prompt（调用 1）。"""
@@ -60,7 +60,7 @@ class Formatter:
     def build_quality_prompt(
         self, query: str, context_str: str, answer: str, reference_facts: str
     ) -> str:
-        """构建质量评估 prompt（调用 2，含 reference_facts）。"""
+        """构建质量评估 prompt（调用 2, 含 reference_facts）"""
         return _fill(
             self._quality_tpl,
             query=query,

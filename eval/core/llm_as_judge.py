@@ -95,14 +95,14 @@ def judge_quality(
     )
 
 
-def compute_verdict(scores: dict[str, float | None]) -> str:
+def execute_verdict(scores: dict[str, float | None]) -> str:
     """纯函数：有值维度中 >= 0.75 的比例 → pass/partial/fail。
 
-    >>> compute_verdict({"faithfulness": 0.75, "answer_relevancy": 0.75, "context_precision": 0.50, "context_recall": 0.75, "answer_correctness": 0.75})
+    >>> execute_verdict({"faithfulness": 0.75, "answer_relevancy": 0.75, "context_precision": 0.50, "context_recall": 0.75, "answer_correctness": 0.75})
     'pass'
-    >>> compute_verdict({"faithfulness": 0.75, "answer_relevancy": 0.50, "context_precision": 0.75, "context_recall": 0.50, "answer_correctness": None})
+    >>> execute_verdict({"faithfulness": 0.75, "answer_relevancy": 0.50, "context_precision": 0.75, "context_recall": 0.50, "answer_correctness": None})
     'partial'
-    >>> compute_verdict({"faithfulness": 0.25, "answer_relevancy": 0.25, "context_precision": 0.25, "context_recall": None, "answer_correctness": 0.25})
+    >>> execute_verdict({"faithfulness": 0.25, "answer_relevancy": 0.25, "context_precision": 0.25, "context_recall": None, "answer_correctness": 0.25})
     'fail'
     """
     valid = [v for v in scores.values() if v is not None]
@@ -121,7 +121,7 @@ _client: OpenAI | None = None
 
 
 def _get_client() -> OpenAI:
-    """模块级 OpenAI client 单例，避免每次 run_judge 重复创建连接池。"""
+    """模块级 OpenAI client 单例, 避免每次 run_judge 重复创建连接池"""
     global _client
     if _client is None:
         _client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
@@ -176,6 +176,6 @@ def run_judge(
         "context_recall": result.context_recall,
         "answer_correctness": result.answer_correctness,
     }
-    result.verdict = compute_verdict(scores)
+    result.verdict = execute_verdict(scores)
 
     return result

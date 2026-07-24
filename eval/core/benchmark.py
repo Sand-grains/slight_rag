@@ -4,6 +4,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent  # eval/core/ → eval/ → 项目根
+
 
 @dataclass
 class BenchmarkItem:
@@ -89,8 +91,10 @@ def _auto_query_id(index: int) -> str:
 
 
 def _load_json(path: str):
-    """加载 JSON 文件，统一处理文件不存在的错误。"""
+    """加载 JSON 文件，相对路径基于项目根目录解析。"""
     p = Path(path)
+    if not p.is_absolute():
+        p = _PROJECT_ROOT / p
     if not p.exists():
         raise FileNotFoundError(f"Benchmark 文件不存在: {path}")
     with open(p, "r", encoding="utf-8") as f:

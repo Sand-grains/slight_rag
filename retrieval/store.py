@@ -8,7 +8,8 @@ from indexing.chunk import Chunk
 from config import TOP_K
 
 
-CACHE_DIR_NAME = ".vector_cache"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CACHE_DIR_NAME = str(_PROJECT_ROOT / ".vector_cache")
 
 
 class VectorStore:

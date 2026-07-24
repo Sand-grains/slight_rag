@@ -28,7 +28,7 @@ from config import TOP_K, LLM_MODEL_ID
 def cmd_retrieval(benchmark_path: str):
     """仅对 Layer 1 retrieval 进行评估"""
     from eval.core.benchmark import load_benchmark
-    from eval.core.retrieval_layer import run_layer1
+    from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
 
     print("加载索引...")
@@ -43,7 +43,7 @@ def cmd_retrieval(benchmark_path: str):
     print(f"  条目: {len(result.items)}")
 
     print("执行 Layer 1 检索评估...")
-    output = run_layer1(retriever, result.items)
+    output = run_retrieval_eval(retriever, result.items)
 
     ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     results_dir = os.path.join("eval", "results", ts)
@@ -55,7 +55,7 @@ def cmd_retrieval(benchmark_path: str):
 def cmd_full(benchmark_path: str):
     """Layer 1 + Layer 2 完整评估。"""
     from eval.core.benchmark import load_benchmark
-    from eval.core.retrieval_layer import run_layer1
+    from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
     from eval.core.llm_as_judge import run_judge
     from eval.core.formatter import Formatter
@@ -74,7 +74,7 @@ def cmd_full(benchmark_path: str):
     print(f"  条目: {len(items)}")
 
     print("执行 Layer 1 检索评估...")
-    layer1 = run_layer1(retriever, items)
+    layer1 = run_retrieval_eval(retriever, items)
 
     print("执行 Layer 2 Judge...")
     judge_results = []
