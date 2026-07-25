@@ -1,6 +1,7 @@
 """Context 格式化 + Prompt 模板加载与填充。"""
 
-import os
+import hashlib
+import logging
 from pathlib import Path
 from typing import List
 from indexing.chunk import Chunk
@@ -42,11 +43,14 @@ def build_judge_context(chunks: List[Chunk]) -> str:
 
 
 class Formatter:
-    """Prompt 格式化器: 加载模板并缓存，按需填充。"""
+    """Prompt 格式化器：加载模板并缓存，按需填充。"""
 
     def __init__(self):
         self._faithfulness_tpl = _load_prompt("faithfulness.md")
         self._quality_tpl = _load_prompt("quality.md")
+        f_prompt_hash = hashlib.sha256(self._faithfulness_tpl.encode()).hexdigest()[:8]
+        q_prompt_hash = hashlib.sha256(self._quality_tpl.encode()).hexdigest()[:8]
+        self.prompt_version = f"{f_prompt_hash}/{q_prompt_hash}"
 
     def build_faithfulness_prompt(self, query: str, context_str: str, answer: str) -> str:
         """构建 faithfulness 评估 prompt（调用 1）。"""
@@ -68,3 +72,15 @@ class Formatter:
             answer=answer,
             reference_facts=reference_facts if reference_facts else "（未提供参考事实）",
         )
+
+
+_formatter_instance: Formatter | None = None
+
+
+def get_formatter() -> Formatter:
+    """模块级单例, 保证 prompt_version 日志只打印一次。"""
+    global _formatter_instance
+    if _formatter_instance is None:
+        _formatter_instance = Formatter()
+        logging.info("Judge prompt version: %s", _formatter_instance.prompt_version)
+    return _formatter_instance
