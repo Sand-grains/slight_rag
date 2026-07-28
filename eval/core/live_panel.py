@@ -168,7 +168,7 @@ class LivePanel:
 
         lines = [CLEAR_SCREEN + CURSOR_HOME]
         lines.extend(self._build_panel_lines(l1, l2, stages, verdicts, deltas, qc, alerts, overflow))
-        sys.stdout.write("\n".join(lines))
+        sys.stdout.write("\n".join(lines) + "\n")
         sys.stdout.flush()
 
     # ============================================================

@@ -218,7 +218,11 @@ def run_full_mode(benchmark_path: str):
     # 加载上次运行（Delta 基线）
     previous_per_query = _load_previous_run()
 
-    # 创建 LivePanel
+    # 模型预热：触达 embedding 模型加载（吸收 tqdm 进度条），避免打乱面板输出
+    retriever.retrieve(items[0].query, top_k=TOP_K)
+
+    # 创建 LivePanel（所有 print 需在 start() 前完成，否则被 ANSI 清屏覆盖）
+    print("启动监控面板...")
     panel = LivePanel(metrics, previous_per_query)
     set_panel(panel)
     panel.set_total(total)
@@ -229,11 +233,9 @@ def run_full_mode(benchmark_path: str):
     )
     panel.start()
 
-    print("执行 Layer 1 检索评估...")
     layer1 = run_retrieval_eval(retriever, items)
     metrics.layer1_results = layer1.results
 
-    print("执行 Layer 2 Judge...")
     judge_results = []
     pool = _get_outer_pool()
     futures = {}
