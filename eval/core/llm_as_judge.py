@@ -127,12 +127,12 @@ def _judge_with_retry(
                 future.cancel()
                 last_error = TimeoutError(f"Judge call timed out after {deadline}s")
             except RETRYABLE_ERRORS as e:
+                from eval.core.monitor_metrics import get_metrics
+                try:
+                    get_metrics().record_retry()
+                except ImportError:
+                    pass
                 if isinstance(e, openai.RateLimitError):
-                    from eval.core.monitor_metrics import get_metrics
-                    try:
-                        get_metrics().record_retry()
-                    except ImportError:
-                        pass
                     if query_id:
                         panel = get_panel()
                         if panel:
