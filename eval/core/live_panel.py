@@ -34,6 +34,26 @@ import time
 from collections import deque
 from datetime import datetime
 
+# Windows: 显式开启 ANSI 转义码支持（Python 默认不会设置此标志）
+if sys.platform == "win32":
+    import os as _os
+    # os.system("") 会触发 CRT 初始化控制台并打开 VT 处理，比 ctypes 更稳
+    _os.system("")
+    import ctypes
+    try:
+        _kernel32 = ctypes.windll.kernel32
+        _kernel32.GetStdHandle.restype = ctypes.c_void_p
+        _kernel32.GetConsoleMode.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+        _kernel32.SetConsoleMode.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        _STD_OUTPUT_HANDLE = -11
+        _ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        _handle = _kernel32.GetStdHandle(_STD_OUTPUT_HANDLE)
+        _mode = ctypes.c_uint32()
+        if _kernel32.GetConsoleMode(_handle, ctypes.byref(_mode)):
+            _kernel32.SetConsoleMode(_handle, _mode.value | _ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+    except OSError:
+        pass  # 非控制台环境（如管道重定向），ANSI 不可用
+
 DEFAULT_REFRESH_SEC = 2
 ALERT_MAXLEN = 20
 ALERT_DISPLAY_N = 5
@@ -47,7 +67,7 @@ C_GREEN = "\033[32m"
 C_YELLOW = "\033[33m"
 C_RED = "\033[31m"
 C_CYAN = "\033[36m"
-CLEAR_SCREEN = "\033[2J"
+CLEAR_SCREEN = "\033[H\033[2J\033[3J"
 CURSOR_HOME = "\033[H"
 CURSOR_HIDE = "\033[?25l"
 CURSOR_SHOW = "\033[?25h"
@@ -162,13 +182,14 @@ class LivePanel:
     # ============================================================
 
     def _render_ansi(self, l1, l2, stages, verdicts, deltas, qc, alerts, overflow):
+        lines = self._build_panel_lines(l1, l2, stages, verdicts, deltas, qc, alerts, overflow)
+
         if self._first_render:
             sys.stdout.write(CURSOR_HIDE)
             self._first_render = False
 
-        lines = [CLEAR_SCREEN + CURSOR_HOME]
-        lines.extend(self._build_panel_lines(l1, l2, stages, verdicts, deltas, qc, alerts, overflow))
-        sys.stdout.write("\n".join(lines) + "\n")
+        # \033[H\033[2J\033[3J 光标归位 + 清可见屏 + 清 scrollback，一次 write 到 stdout
+        sys.stdout.write(CLEAR_SCREEN + "\n".join(lines) + "\n")
         sys.stdout.flush()
 
     # ============================================================
