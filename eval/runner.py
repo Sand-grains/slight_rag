@@ -8,7 +8,7 @@
     # 完整评估（Layer 1 + Layer 2，调 Judge LLM，计费）
     uv run python -m eval.runner --mode full
 
-    # 对比两次运行
+    # 对比某两次运行
     uv run python -m eval.runner --compare <run_id_1> <run_id_2>
 
 """
@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import sys
+import time as time_module
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -25,7 +26,7 @@ from pathlib import Path
 from retrieval.store import VectorStore
 from retrieval.retriever import Retriever
 from retrieval.generator import Generator
-from config import TOP_K, LLM_MODEL_ID, EVAL_MAX_WORKERS
+from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID, EVAL_MAX_WORKERS, GENERATOR_TEMPERATURE
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent  # eval/runner.py → eval/ → 项目根
 
@@ -43,27 +44,96 @@ def _get_outer_pool() -> ThreadPoolExecutor:
     return _OUTER_POOL
 
 
+def _load_previous_run() -> dict[str, dict] | None:
+    """加载最近一次运行的 per_query.json（排除当前这次），按 query_id 索引。"""
+    timeline = _PROJECT_ROOT / "eval" / "results" / "timeline"
+    if not timeline.exists():
+        return None
+    runs = sorted(
+        [d for d in timeline.iterdir() if d.is_dir()],
+        reverse=True,
+    )
+    for run_dir in runs:
+        per_query_path = run_dir / "per_query.json"
+        if per_query_path.exists():
+            try:
+                with open(per_query_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                continue
+            if data and any(
+                "faithfulness" in v for v in data.values()
+                if isinstance(v, dict)
+            ):
+                return data
+    return None
+
+
 def _evaluate_one(item, retriever, generator):
-    """单条 query 的完整 eval。try/except 隔离，失败不影响其余 query。"""
+    """单条 query 的完整 eval。含 Generator 缓存 + 阶段打点。try/except 隔离。"""
     from eval.core.llm_as_judge import run_judge, JudgeResult
-    from eval.core.formatter import get_formatter
+    from eval.core.formatter import get_formatter, build_judge_context
+    from eval.core.judge_cache import _generator_cache_key
+    from eval.core.monitor_metrics import get_metrics
+    from eval.core.live_panel import get_panel
+    from infra.cache import get_cache as get_cache_backend
+    from infra.config import REDIS_DEFAULT_TTL
+
     try:
+        # Stage: retrieve
+        t0 = time_module.time()
         chunks = retriever.retrieve(item.query, top_k=TOP_K)
-        answer = generator.generate(item.query, chunks)
-        return run_judge(item.query_id, item.query, chunks, answer,
-                         item.reference_facts, formatter=get_formatter())
+        retrieve_ms = (time_module.time() - t0) * 1000
+
+        # Generator cache
+        context_str = build_judge_context(chunks)
+        gen_cache_key = _generator_cache_key(item.query_id, context_str)
+        cache_backend = get_cache_backend()
+        gen_cached = cache_backend.get(gen_cache_key)
+
+        metrics = get_metrics()
+
+        # Stage: generate
+        if gen_cached is not None:
+            metrics.record_generator_cache_hit()
+            answer = gen_cached
+            generate_ms = 0.0
+        else:
+            metrics.record_generator_cache_miss()
+            t1 = time_module.time()
+            metrics.record_llm_call("generator")
+            answer = generator.generate(item.query, chunks, temperature=GENERATOR_TEMPERATURE)
+            generate_ms = (time_module.time() - t1) * 1000
+            cache_backend.set(gen_cache_key, answer, ttl_seconds=REDIS_DEFAULT_TTL)
+
+        # Judge（temperature=0 保证确定性）
+        result = run_judge(item.query_id, item.query, chunks, answer,
+                          item.reference_facts, formatter=get_formatter(),
+                          temperature=0.0)
+        result.retrieve_ms = retrieve_ms
+        result.generate_ms = generate_ms
+
+        return result
     except Exception as e:
+        panel = get_panel()
+        if panel:
+            panel.push_alert(item.query_id, f"Generator {type(e).__name__}: {e}")
         jr = JudgeResult(query_id=item.query_id)
-        jr.judge_error = f"evaluate_one failed: {e}"
+        jr.generator_error = f"evaluate_one failed: {e}"
         jr.verdict = "error"
         return jr
 
 
 def run_retrieval_mode(benchmark_path: str):
-    """仅对 Layer 1 retrieval 进行评估"""
+    """仅对 Layer 1 retrieval 进行评估（v5: LivePanel 终端报告）。"""
     from eval.core.benchmark import load_benchmark
     from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
+    from eval.core.monitor_metrics import get_metrics, reset_metrics
+    from eval.core.live_panel import LivePanel
+
+    reset_metrics()
+    metrics = get_metrics()
 
     print("加载索引...")
     store = VectorStore.vector_restore()
@@ -74,10 +144,22 @@ def run_retrieval_mode(benchmark_path: str):
 
     print(f"加载 benchmark: {benchmark_path}")
     result = load_benchmark(benchmark_path, valid_chunk_ids=store.chunk_ids)
-    print(f"  条目: {len(result.items)}")
+    items = result.items
+    total = len(items)
+    print(f"  条目: {total}")
+
+    # LivePanel（仅 render_final，无 daemon 线程——retrieval 无 LLM，跑得太快）
+    previous_per_query = _load_previous_run()
+    panel = LivePanel(metrics, previous_per_query)
+    panel.set_total(total)
+    panel.set_meta(benchmark_name=benchmark_path, eval_mode="retrieval")
 
     print("执行 Layer 1 检索评估...")
-    output = run_retrieval_eval(retriever, result.items)
+    output = run_retrieval_eval(retriever, items)
+    metrics.layer1_results = output.results
+
+    panel.query_count = total
+    panel.render_final()
 
     ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     results_dir = str(_PROJECT_ROOT / "eval" / "results" / "timeline" / ts)
@@ -87,14 +169,16 @@ def run_retrieval_mode(benchmark_path: str):
 
 
 def run_full_mode(benchmark_path: str):
-    """Layer 1 + Layer 2 完整评估。"""
+    """Layer 1 + Layer 2 完整评估（v5: LivePanel 终端监控）。"""
     from eval.core.benchmark import load_benchmark
     from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
     from eval.core.llm_as_judge import _get_client
     from eval.core.monitor_metrics import get_metrics, reset_metrics
+    from eval.core.live_panel import LivePanel, set_panel
 
     reset_metrics()
+    metrics = get_metrics()
 
     print("加载索引...")
     store = VectorStore.vector_restore()
@@ -110,10 +194,26 @@ def run_full_mode(benchmark_path: str):
     print(f"加载 benchmark: {benchmark_path}")
     result = load_benchmark(benchmark_path, valid_chunk_ids=store.chunk_ids)
     items = result.items
-    print(f"  条目: {len(items)}")
+    total = len(items)
+    print(f"  条目: {total}")
+
+    # 加载上次运行（Delta 基线）
+    previous_per_query = _load_previous_run()
+
+    # 创建 LivePanel
+    panel = LivePanel(metrics, previous_per_query)
+    set_panel(panel)
+    panel.set_total(total)
+    panel.set_meta(
+        benchmark_name=benchmark_path,
+        generator_model=LLM_MODEL_ID or "unknown",
+        judge_model=EVAL_LLM_MODEL_ID,
+    )
+    panel.start()
 
     print("执行 Layer 1 检索评估...")
     layer1 = run_retrieval_eval(retriever, items)
+    metrics.layer1_results = layer1.results
 
     print("执行 Layer 2 Judge...")
     judge_results = []
@@ -123,57 +223,37 @@ def run_full_mode(benchmark_path: str):
         f = pool.submit(_evaluate_one, item, retriever, generator)
         futures[f] = item
 
-    for future in as_completed(futures):
-        jr = future.result()
-        judge_results.append(jr)
-        done = len(judge_results)
-        if done % 10 == 0:
-            print(f"  {done}/{len(items)}")
+    try:
+        for future in as_completed(futures):
+            jr = future.result()
+            judge_results.append(jr)
 
-    # 写入报告
+            # 推入唯一真源
+            metrics.layer2_results.append(jr)
+            if jr.retrieve_ms is not None:
+                metrics.record_stage("retrieve", jr.retrieve_ms)
+            if jr.generate_ms is not None:
+                metrics.record_stage("generate", jr.generate_ms)
+            if jr.judge_faithfulness_ms is not None:
+                metrics.record_stage("judge_faithfulness", jr.judge_faithfulness_ms)
+            if jr.judge_quality_ms is not None:
+                metrics.record_stage("judge_quality", jr.judge_quality_ms)
+
+            panel.query_done()
+    finally:
+        panel.stop()  # 幂等
+
+    # 最终报告（终端）
+    panel.render_final()
+
+    # 写入文件报告
     ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     results_dir = str(_PROJECT_ROOT / "eval" / "results" / "timeline" / ts)
     run_info = build_run_info(benchmark_path, run_mode="full")
     generate_report(layer1, results_dir, run_info,
                     judge_results=judge_results,
-                    metrics_summary=get_metrics().summary_dict())
+                    metrics_summary=metrics.summary_dict())
 
-    # 追加 Layer 2 数据到 per_query.json
-    per_query_path = os.path.join(results_dir, "per_query.json")
-    with open(per_query_path, "r", encoding="utf-8") as f:
-        per_query = json.load(f)
-    for jr in judge_results:
-        if jr.query_id in per_query:
-            per_query[jr.query_id].update({
-                "faithfulness": jr.faithfulness,
-                "answer_relevancy": jr.answer_relevancy,
-                "context_precision": jr.context_precision,
-                "context_recall": jr.context_recall,
-                "answer_correctness": jr.answer_correctness,
-                "verdict": jr.verdict,
-                "parse_error": jr.parse_error,
-                "judge_error": jr.judge_error,
-                "generator_error": jr.generator_error,
-            })
-    with open(per_query_path, "w", encoding="utf-8") as f:
-        json.dump(per_query, f, ensure_ascii=False, indent=2)
-
-    # Layer 2 聚合
-    valid = [jr for jr in judge_results if jr.faithfulness is not None]
-    if valid:
-        print(f"\nLayer 2 聚合 ({len(valid)}/{len(judge_results)} 条有效):")
-        print(f"  faithfulness 均值:    {sum(j.faithfulness or 0 for j in judge_results) / len(valid):.4f}")
-        print(f"  answer_relevancy 均值: {sum(j.answer_relevancy or 0 for j in judge_results) / len(valid):.4f}")
-        print(f"  context_precision 均值: {sum(j.context_precision or 0 for j in judge_results) / len(valid):.4f}")
-        print(f"  context_recall 均值:   {sum(j.context_recall or 0 for j in judge_results) / len(valid):.4f}")
-        print(f"  answer_correctness 均值:{sum(j.answer_correctness or 0 for j in judge_results) / len(valid):.4f}")
-        verdicts = {"pass": 0, "partial": 0, "fail": 0, "error": 0}
-        for jr in judge_results:
-            v = jr.verdict if jr.verdict in verdicts else "error"
-            verdicts[v] += 1
-        print(f"  verdict 分布: {verdicts}")
-
-    get_metrics().print_summary()
     print(f"\n报告: {results_dir}")
     return results_dir
 
@@ -194,10 +274,10 @@ def run_compare(run_a: str, run_b: str):
     agg_a = summary_a["aggregate"]
     agg_b = summary_b["aggregate"]
 
-    metrics = ["recall_at_k", "precision_at_k", "hit_at_k", "mrr", "map_at_k", "ndcg_at_k"]
+    metrics_list = ["recall_at_k", "precision_at_k", "hit_at_k", "mrr", "map_at_k", "ndcg_at_k"]
     print(f"\n{'Metric':<18} {'Run A':>10} {'Run B':>10} {'Delta':>10}")
     print("-" * 50)
-    for m in metrics:
+    for m in metrics_list:
         va = agg_a.get(m, 0)
         vb = agg_b.get(m, 0)
         delta = vb - va
