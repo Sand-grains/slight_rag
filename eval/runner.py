@@ -257,6 +257,14 @@ def run_full_mode(benchmark_path: str):
             if jr.judge_quality_ms is not None:
                 metrics.record_stage("judge_quality", jr.judge_quality_ms)
 
+            # 端到端延迟 = retrieve + generate + max(faith, qual)，逐 query 计算后取百分位
+            if jr.retrieve_ms is not None and jr.generate_ms is not None:
+                e2e = jr.retrieve_ms + jr.generate_ms + max(
+                    jr.judge_faithfulness_ms or 0,
+                    jr.judge_quality_ms or 0,
+                )
+                metrics.record_stage("end_to_end", e2e)
+
             panel.query_done()
     finally:
         panel.stop()  # 幂等
