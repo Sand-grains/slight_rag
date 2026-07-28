@@ -1,30 +1,7 @@
 from typing import List
 from openai import OpenAI
 from indexing.chunk import Chunk
-from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL
-
-PROMPT_TEMPLATE = """
-## Role
-你是一个专业的知识库问答助手, 你的任务是严格根据提供的【参考文档】回答用户的问题
-
-## Rules(关键)
-1.必须**仅依赖**下方的【参考文档】进行回答, 不要使用你内部的训练知识
-2.如果【参考文档】中没有包含回答问题所需的信息, 请直接回答: "知识库中未找到相关信息". **严禁编造**
-3.回答需要简洁, 逻辑清晰, 准确, 有条理, 分点描述
-4.引用来源时标注[来源X], 在回答的末尾注明引用的文档名称
-
-## Context(检索到的片段)
-以下是参考文档片段:
-<context>
-{context_str}
-</context>
-
-## User Question
-用户问题是:
-{query_str}
-
-## 回答
-请开始回答:"""
+from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, PROMPT_TEMPLATE, GENERATOR_TEMPERATURE
 
 
 def _build_context(chunks: List[Chunk]) -> str:
@@ -43,8 +20,8 @@ class Generator:
         self.client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)  # 复用同一个 client 实例
         self.model = model                                                  # 模型 ID，评估时可传入低成本模型
 
-    def generate(self, query: str, context_chunks: List[Chunk]) -> str:
-        """构造 prompt 并调用 DeepSeek API 生成回答"""
+    def generate(self, query: str, context_chunks: List[Chunk], temperature: float = GENERATOR_TEMPERATURE) -> str:
+        """构造 prompt 并调用 API 生成回答"""
         context_str = _build_context(context_chunks)             # chunk 列表 → 带来源标记的上下文字符串
         prompt = PROMPT_TEMPLATE.format(
             context_str=context_str, query_str=query             # 将上下文和用户问题填入模板
@@ -52,5 +29,6 @@ class Generator:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],      # 单轮对话，System Prompt已写在模板里的Role段
+            temperature=temperature,
         )
         return response.choices[0].message.content               # 提取 LLM 返回的文本
