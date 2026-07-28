@@ -285,6 +285,15 @@ def _get_client() -> OpenAI:
     return _client
 
 
+def _timed_judge_with_retry(judge_fn, judge_args, max_retries, base_delay, deadline, query_id, judge_type):
+    """带计时的 _judge_with_retry 包装器，返回 ((result_tuple), elapsed_ms)。
+    每个 future 内部独立计时——消除并行调用间因 future.result() 串行等待导致的计时污染。
+    """
+    t0 = time.time()
+    result = _judge_with_retry(judge_fn, judge_args, max_retries, base_delay, deadline, query_id, judge_type)
+    return result, (time.time() - t0) * 1000
+
+
 def run_judge(
     query_id: str, query: str, chunks, answer: str, reference_facts: str,
     client: OpenAI | None = None,
@@ -312,18 +321,17 @@ def run_judge(
 
     result = JudgeResult(query_id=query_id)
 
-    # 内层 2-worker 池：faithfulness + quality 并行
-    t_judge_start = time.time()
+    # 内层 2-worker 池：faithfulness + quality 并行（各自独立计时）
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="judge") as pool:
         faith_future = pool.submit(
-            _judge_with_retry, judge_faithfulness,
+            _timed_judge_with_retry, judge_faithfulness,
             (client, model, formatter, query, context_str, answer_str,
              temperature, query_id),
             JUDGE_MAX_RETRIES, JUDGE_BASE_DELAY, JUDGE_DEADLINE,
             query_id, "faithfulness",
         )
         quality_future = pool.submit(
-            _judge_with_retry, judge_quality,
+            _timed_judge_with_retry, judge_quality,
             (client, model, formatter, query, context_str, answer_str,
              reference_facts, temperature, query_id),
             JUDGE_MAX_RETRIES, JUDGE_BASE_DELAY, JUDGE_DEADLINE,
@@ -331,16 +339,16 @@ def run_judge(
         )
 
         try:
-            faith, claims, err1 = faith_future.result()
+            (faith, claims, err1), faith_ms = faith_future.result()
         except JudgeFailedError as e:
-            faith, claims, err1 = None, [], str(e)
-        result.judge_faithfulness_ms = (time.time() - t_judge_start) * 1000
+            faith, claims, err1, faith_ms = None, [], str(e), 0.0
+        result.judge_faithfulness_ms = faith_ms
 
         try:
-            ar, cp, cr, ac, err2 = quality_future.result()
+            (ar, cp, cr, ac, err2), qual_ms = quality_future.result()
         except JudgeFailedError as e:
-            ar, cp, cr, ac, err2 = None, None, None, None, str(e)
-        result.judge_quality_ms = (time.time() - t_judge_start) * 1000
+            ar, cp, cr, ac, err2, qual_ms = None, None, None, None, str(e), 0.0
+        result.judge_quality_ms = qual_ms
 
     result.faithfulness = faith
     result.grounded_claims = claims
