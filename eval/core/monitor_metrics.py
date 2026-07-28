@@ -50,6 +50,7 @@ class MonitorMetrics:
     stage_generate_ms: list[float] = field(default_factory=list)
     stage_judge_faithfulness_ms: list[float] = field(default_factory=list)
     stage_judge_quality_ms: list[float] = field(default_factory=list)
+    stage_end_to_end_ms: list[float] = field(default_factory=list)
 
     # == 缓存（拆分为 Generator / Judge 独立计数）==
     generator_cache_hits: int = 0
@@ -187,7 +188,7 @@ class MonitorMetrics:
 
     def verdict_distribution(self) -> dict[str, int]:
         counts = {"pass": 0, "partial": 0, "fail": 0, "error": 0}
-        for r in self.layer2_results:
+        for r in list(self.layer2_results):
             v = r.verdict if r.verdict in counts else "error"
             counts[v] += 1
         return counts
@@ -198,6 +199,7 @@ class MonitorMetrics:
             "generate": list(self.stage_generate_ms),
             "judge_faithfulness": list(self.stage_judge_faithfulness_ms),
             "judge_quality": list(self.stage_judge_quality_ms),
+            "end_to_end": list(self.stage_end_to_end_ms),
         }
         import numpy
         result = {}
@@ -242,6 +244,9 @@ class MonitorMetrics:
             "stage_judge_quality_p50": sp.get("judge_quality", {}).get("p50", 0.0),
             "stage_judge_quality_p75": sp.get("judge_quality", {}).get("p75", 0.0),
             "stage_judge_quality_p95": sp.get("judge_quality", {}).get("p95", 0.0),
+            "stage_end_to_end_p50": sp.get("end_to_end", {}).get("p50", 0.0),
+            "stage_end_to_end_p75": sp.get("end_to_end", {}).get("p75", 0.0),
+            "stage_end_to_end_p95": sp.get("end_to_end", {}).get("p95", 0.0),
         }
 
     def print_summary(self):

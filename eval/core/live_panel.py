@@ -361,9 +361,6 @@ class LivePanel:
             print()
             print("  阶段延迟 (ms)           P50     P75     P95")
             print("  ────────────────")
-            end_to_end_p50 = 0.0
-            end_to_end_p75 = 0.0
-            end_to_end_p95 = 0.0
             for label, key in [("Retrieve", "retrieve"), ("Generate", "generate"),
                                ("Judge Faithfulness", "judge_faithfulness"),
                                ("Judge Quality", "judge_quality")]:
@@ -372,18 +369,9 @@ class LivePanel:
                 p75 = int(s.get("p75", 0))
                 p95 = int(s.get("p95", 0))
                 print(f"  {label:<20s}  {p50:>6d}  {p75:>6d}  {p95:>6d}")
-                if key in ("retrieve", "generate"):
-                    end_to_end_p50 += float(s.get("p50", 0))
-                    end_to_end_p75 += float(s.get("p75", 0))
-                    end_to_end_p95 += float(s.get("p95", 0))
-                elif key == "judge_faithfulness":
-                    judge_q = stages.get("judge_quality", {})
-                    end_to_end_p50 += max(float(s.get("p50", 0)), float(judge_q.get("p50", 0)))
-                    end_to_end_p75 += max(float(s.get("p75", 0)), float(judge_q.get("p75", 0)))
-                    end_to_end_p95 += max(float(s.get("p95", 0)), float(judge_q.get("p95", 0)))
 
-            print(f"  {'End-to-end':<20s}  {int(end_to_end_p50):>6d}  {int(end_to_end_p75):>6d}  {int(end_to_end_p95):>6d}")
-            print(f"  （Overhead 残差 ≈ {int(end_to_end_p50 - end_to_end_p50 * 0.95)}ms，含线程调度 + JSON 解析等非业务开销）")
+            e2e = stages.get("end_to_end", {})
+            print(f"  {'End-to-end':<20s}  {int(e2e.get('p50', 0)):>6d}  {int(e2e.get('p75', 0)):>6d}  {int(e2e.get('p95', 0)):>6d}")
 
             print()
             print("  LLM 调用统计")
@@ -431,7 +419,7 @@ class LivePanel:
             return {}
         deltas_accum: dict[str, list[float]] = {}
         matching = 0
-        for r in metrics.layer2_results:
+        for r in list(metrics.layer2_results):
             qid = getattr(r, "query_id", None)
             if qid not in self.previous_per_query:
                 continue
@@ -447,7 +435,7 @@ class LivePanel:
         # Also compute L1 deltas from layer1_results
         l1_deltas: dict[str, list[float]] = {}
         l1_prev_count = 0
-        for r in metrics.layer1_results:
+        for r in list(metrics.layer1_results):
             qid = getattr(r, "query_id", None)
             if not qid or qid not in self.previous_per_query:
                 continue
