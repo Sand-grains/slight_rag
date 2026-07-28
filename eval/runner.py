@@ -101,9 +101,9 @@ def _evaluate_one(item, retriever, generator):
         else:
             metrics.record_generator_cache_miss()
             t1 = time_module.time()
-            metrics.record_llm_call("generator")
             answer = generator.generate(item.query, chunks, temperature=GENERATOR_TEMPERATURE)
             generate_ms = (time_module.time() - t1) * 1000
+            metrics.record_llm_call("generator")
             cache_backend.set(gen_cache_key, answer, ttl_seconds=REDIS_DEFAULT_TTL)
 
         # Judge（temperature=0 保证确定性）
