@@ -11,6 +11,49 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL")      # API 地址，如 https://api.dee
 
 EVAL_LLM_MODEL_ID = os.getenv("EVAL_LLM_MODEL_ID", "deepseek-chat")  # 评估专用低成本模型
 
+# === Generator prompt template（从 retrieval/generator.py 迁入, 本质是配置常量）===
+PROMPT_TEMPLATE = """
+## Role
+你是一个专业的知识库问答助手, 你的任务是严格根据提供的【参考文档】回答用户的问题
+
+## Rules(关键)
+1.必须**仅依赖**下方的【参考文档】进行回答, 不要使用你内部的训练知识
+2.如果【参考文档】中没有包含回答问题所需的信息, 请直接回答: "知识库中未找到相关信息". **严禁编造**
+3.回答需要简洁, 逻辑清晰, 准确, 有条理, 分点描述
+4.引用来源时标注[来源X], 在回答的末尾注明引用的文档名称
+
+## Context(检索到的片段)
+以下是参考文档片段:
+<context>
+{context_str}
+</context>
+
+## User Question
+用户问题是:
+{query_str}
+
+## 回答
+请开始回答:"""
+
+# === Generator 配置常量（eval 场景专用）===
+GENERATOR_TEMPERATURE = float(os.getenv("GENERATOR_TEMPERATURE", "0"))
+GENERATOR_MAX_TOKENS = int(os.getenv("GENERATOR_MAX_TOKENS", "0")) or None  # 0 表示不截断
+GENERATOR_TOP_P = float(os.getenv("GENERATOR_TOP_P", "1.0"))
+
+# === 监控模式 ===
+LIVE_PANEL_MODE = os.getenv("LIVE_PANEL_MODE", "ansi")  # "ansi" 或 "plain"
+
+# === Generator 配置指纹（模块级常量, 一次计算, 整个 eval run 不变）===
+_generator_fingerprint = "|".join([
+    LLM_MODEL_ID,
+    str(GENERATOR_TEMPERATURE),
+    str(GENERATOR_MAX_TOKENS),
+    str(GENERATOR_TOP_P),
+    hashlib.sha256(PROMPT_TEMPLATE.encode()).hexdigest()[:16],
+])
+GENERATOR_CONFIG_HASH = hashlib.sha256(_generator_fingerprint.encode()).hexdigest()[:12]
+
+
 # Embedding 模型名称，首次运行自动从 HuggingFace 下载到本地缓存
 EMBEDDING_MODEL = "D:/Model"  # BGE-M3, 1024 维, 本地路径
 
