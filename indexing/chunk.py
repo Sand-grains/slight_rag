@@ -1,3 +1,21 @@
+"""管线流转的通用文本数据模型。
+
+核心特性：
+    - Chunk 承载一段文本及其来源元数据，贯穿索引 → 检索 → 生成全管线
+    - DocMetadata 作为共享引用挂在每个 Chunk 上，避免文档级信息冗余存储
+    - chunk_id 确定性生成（{doc_id}:{chunk_index}），支持前后扩展定位
+
+用法示例::
+
+    from indexing import Chunk, DocMetadata
+    meta = DocMetadata(title="README", doc_type=".md")
+    c = Chunk(doc_id="docs/readme", chunk_id="docs/readme:0", content="# Hello", doc_meta=meta)
+
+公共接口：
+    - DocMetadata: 文档级元数据（title / author / source / source_url / doc_type / language / chunk_index）
+    - Chunk: 通用文本容器（doc_id / chunk_id / content / retrieval_text / doc_meta / created_at）
+"""
+
 from dataclasses import dataclass, field
 
 

@@ -1,3 +1,23 @@
+"""双路检索 + RRF 融合。
+
+核心特性：
+    - 稠密检索：BGE-M3 embedding → 余弦相似度 top_k 候选
+    - 稀疏检索：jieba 分词 → BM25 打分 top_k 候选
+    - RRF (Reciprocal Rank Fusion, k=60) 融合两路排序 → 取最终 top_k
+    - 各路多取 candidate_k = top_k * 2 给 RRF 留余量
+
+用法示例::
+
+    from retrieval import Retriever
+    from retrieval.store import VectorStore
+    store = VectorStore.vector_restore()
+    retriever = Retriever(store)
+    chunks = retriever.retrieve("什么是 RAG", top_k=5)
+
+公共接口：
+    - Retriever: 双路检索器，持有 VectorStore 引用
+"""
+
 from typing import List
 from indexing.chunk import Chunk
 from retrieval.embedding import embed

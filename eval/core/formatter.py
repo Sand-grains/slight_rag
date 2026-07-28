@@ -1,4 +1,23 @@
-"""Context 格式化 + Prompt 模板加载与填充。"""
+"""Judge 上下文字符串构建 + Prompt 模板加载与填充。
+
+核心特性：
+    - Formatter 类加载并缓存 faithfulness.md / quality.md 两个 Judge prompt 模板
+    - build_judge_context() 将 chunk 列表拼成带 [来源X] 标记的结构化上下文字符串
+    - prompt_version 由模板文件内容 SHA256 计算，Judge 缓存键使用此版本号
+    - 模块级 get_formatter() 单例，首次调用加载模板
+
+用法示例::
+
+    from eval.core.formatter import get_formatter, build_judge_context
+    context_str = build_judge_context(chunks)
+    formatter = get_formatter()
+    prompt = formatter.build_faithfulness_prompt(query, context_str, answer)
+
+公共接口：
+    - Formatter: 模板加载器 + prompt 构造函数
+    - build_judge_context: chunk 列表 → Judge 用上下文字符串
+    - get_formatter: 模块级 Formatter 单例
+"""
 
 import hashlib
 import logging

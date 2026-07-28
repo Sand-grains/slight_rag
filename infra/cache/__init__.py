@@ -1,3 +1,20 @@
+"""缓存工厂：RedisBackend + NoopBackend 降级。
+
+核心特性：
+    - get_cache() 模块级单例，双重检查锁（threading.Lock）防止并行区域多线程重复创建
+    - 首次调用时尝试创建 RedisBackend 并做健康检查，失败则自动降级为 NoopBackend
+    - NoopBackend 的 get 永远返回 None，eval 流程不中断，缓存命中率显示 '—'
+
+用法示例::
+
+    from infra.cache import get_cache
+    cache = get_cache()
+    cache.set("key", "value", ttl_seconds=3600)
+
+公共接口：
+    - get_cache: 获取缓存后端单例（RedisBackend | NoopBackend）
+"""
+
 import logging
 import threading
 from infra.cache.backend import CacheBackend

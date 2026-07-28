@@ -1,4 +1,28 @@
-"""Eval 运行时监控。模块级单例，MonitorMetrics 为唯一真源——LivePanel 和 reporter 均为只读消费者。"""
+"""Eval 运行时监控指标采集：MonitorMetrics 为唯一真源。
+
+核心特性：
+    - 阶段延迟 ×4：stage_retrieve_ms / stage_generate_ms / stage_judge_faithfulness_ms / stage_judge_quality_ms
+    - 缓存拆分：Generator 缓存（hits/misses）+ Judge 缓存（hits/misses）独立计数
+    - LLM 调用按类型拆分：generator_llm_calls / judge_faithfulness_calls / judge_quality_calls
+    - Per-query 原始结果：layer1_results / layer2_results（LivePanel 和 reporter 的唯一数据来源）
+    - 聚合方法内部浅拷贝后遍历（list(results)），线程安全
+    - 模块级单例 get_metrics() / reset_metrics()，每次 run_full_mode 开头重置
+
+用法示例::
+
+    from eval.core.monitor_metrics import get_metrics, reset_metrics
+    reset_metrics()
+    metrics = get_metrics()
+    metrics.record_stage("retrieve", 120.5)
+    metrics.record_llm_call("generator")
+    print(metrics.layer1_means())       # → {"recall_at_k": 0.8256, ...}
+    print(metrics.stage_percentiles())  # → {"retrieve": {"p50": 120.5, ...}, ...}
+
+公共接口：
+    - MonitorMetrics: 运行时指标容器（记录方法 + 聚合方法 + 计算属性）
+    - get_metrics: 模块级单例获取
+    - reset_metrics: 重置单例（每次评测运行开头调用）
+"""
 
 import logging
 from dataclasses import dataclass, field

@@ -1,3 +1,29 @@
+"""项目根配置：LLM API、Embedding 模型、chunk 参数、eval 并发与重试、Generator 配置指纹。
+
+核心特性：
+    - 所有路径基于 __file__ 推导 _PROJECT_ROOT，不依赖 CWD
+    - .env 通过 load_dotenv 加载，常量通过 os.getenv 读取并带默认值
+    - PROMPT_TEMPLATE 从 retrieval/generator.py 迁入（避免循环导入且语义为配置常量）
+    - GENERATOR_CONFIG_HASH 模块级一次计算，sha256(model + temperature + max_tokens + top_p + prompt_template) 捕获 Generator 全部配置变更
+
+用法示例::
+
+    from config import LLM_MODEL_ID, GENERATOR_CONFIG_HASH, TOP_K, _PROJECT_ROOT
+    data_path = _PROJECT_ROOT / "data"
+
+公共接口（常量）：
+    - LLM_API_KEY / LLM_MODEL_ID / LLM_BASE_URL: DeepSeek API 配置
+    - EVAL_LLM_MODEL_ID: 评估专用低成本模型
+    - PROMPT_TEMPLATE: Generator 中文 RAG prompt 模板
+    - GENERATOR_TEMPERATURE / GENERATOR_MAX_TOKENS / GENERATOR_TOP_P: Generator 配置（eval 场景默认 temperature=0）
+    - GENERATOR_CONFIG_HASH: Generator 配置指纹（12 位 hex）
+    - LIVE_PANEL_MODE: 终端面板模式（"ansi" | "plain"）
+    - EMBEDDING_MODEL / CHUNK_SIZE / CHUNK_OVERLAP / TOP_K / RELEVANCE_THRESHOLD: 检索管线参数
+    - _PROJECT_ROOT: 项目根目录 Path（CWD 无关）
+    - EVAL_MAX_WORKERS / JUDGE_MAX_RETRIES / JUDGE_BASE_DELAY / JUDGE_DEADLINE: Eval 并发与重试参数
+    - COST_INPUT_PRICE_PER_1K / COST_OUTPUT_PRICE_PER_1K: 成本估算单价
+"""
+
 import hashlib
 import os
 from pathlib import Path

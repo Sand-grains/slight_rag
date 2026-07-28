@@ -1,13 +1,31 @@
-"""LivePanel: daemon-thread terminal dashboard for eval monitoring.
+"""LivePanel：后台 daemon 线程终端实时面板。
 
-用法：
+核心特性：
+    - 后台 daemon 线程每 2 秒持锁浅拷贝 metrics → 格式化面板 → 清屏重绘（ANSI）或追加（plain）
+    - ANSI/plain 双模式，通过 .env 中 LIVE_PANEL_MODE 切换，兼容 PyCharm embedded terminal
+    - 面板显示：进度条 + Layer 1/Layer 2 指标 vs 上次 delta + 阶段延迟 P50/P75/P95 + 成本/缓存命中率 + 异常事件滚动区
+    - 事件区仅显示异常（429 / parse_error / judge_error），不含 pass——成功的 query 不产生事件
+    - render_final() 跑完后打印完整最终报告，替代老旧散落 print
+    - stop() 幂等，finally 块安全调用
+    - 模块级单例 get_panel() / set_panel()，深层 judge 代码直接 push_alert() 避免参数层层透传
+    - push_alert() 无锁（deque.appendleft 在 CPython GIL 下原子）
+
+用法示例::
+
+    from eval.core.live_panel import LivePanel, set_panel
     panel = LivePanel(metrics, previous_per_query)
     set_panel(panel)
     panel.set_total(len(items))
+    panel.set_meta("bench.json", generator_model="deepseek-v4-flash", judge_model="deepseek-v4-pro")
     panel.start()
-    # ... eval loop ...
+    # ... as_completed loop ...
     panel.stop()
     panel.render_final()
+
+公共接口：
+    - LivePanel: 终端面板类（start / stop / query_done / push_alert / render_final）
+    - get_panel: 模块级单例获取
+    - set_panel: 模块级单例设置
 """
 
 import sys

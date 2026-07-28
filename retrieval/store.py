@@ -1,3 +1,24 @@
+"""内存向量存储：numpy 稠密向量 + BM25 稀疏索引，支持持久化与恢复。
+
+核心特性：
+    - 稠密检索：numpy 点积 → argpartition 粗筛 + argsort 精排 → top_k chunks
+    - 稀疏检索：jieba 分词 + BM25Okapi 打分 → top_k chunks
+    - 持久化：chunks → pickle, vectors → .npy，支持从磁盘恢复（含 BM25 重建）
+    - add() 每次全量重建 BM25 索引（542 chunk 级别开销可忽略）
+
+用法示例::
+
+    from retrieval.store import VectorStore
+    store = VectorStore()
+    store.add(chunks, vectors)
+    results = store.search_dense(query_vector, top_k=5)
+
+公共接口：
+    - VectorStore: 内存向量存储（add / search_dense / search_sparse / vector_persistence / vector_restore）
+    - chunk_ids (property): 库中所有 chunk_id 集合
+    - chunks (property): 库中全部 chunk 只读视图
+"""
+
 import numpy
 import pickle
 import jieba

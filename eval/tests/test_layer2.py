@@ -1,4 +1,8 @@
-"""Layer 2 Judge 单条试跑测试。"""
+"""Layer 2 Judge 单条试跑测试脚本。
+
+手动验证 Generator 生成 + Judge 双调用 + 缓存查/写的端到端正确性。
+"""
+
 from eval.core.benchmark import load_benchmark
 from eval.core.llm_as_judge import run_judge
 from retrieval.store import VectorStore

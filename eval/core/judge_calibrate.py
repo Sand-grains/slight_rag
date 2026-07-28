@@ -1,13 +1,19 @@
-"""5-sample 校准工作流：验证 Judge prompt 对好/坏答案的区分度。
+"""Judge prompt 校准工作流：5-sample 验证好/坏答案区分度。
 
-流程：
-1. 从 benchmark 取 5 条, 逐条跑 pipeline 产出"好答案"
-2. 构建"坏答案": 类型 A（注入幻觉）+ 类型 B（错误 chunk 喂入）
-3. 对好/坏答案分别跑 Judge, 计算区分度
-4. 不通过则迭代（最多 3 轮）
+核心特性：
+    - 从 benchmark 取 5 条，逐条跑 pipeline 产出"好答案"（正常上下文）
+    - 构建"坏答案"：SWAP_TIER_1（同级术语替换）+ SWAP_TIER_2（结构破坏），无匹配时追加错误陈述
+    - 对好/坏答案分别跑 Judge，计算 faithfulness 区分度（diff = good_mean - bad_mean）
+    - 最多 3 轮迭代，首轮即通过时退出；Tier 2 自动启用（三轮后 diff < 0.50）
+    - 模块级 OpenAI client 单例，循环外复用
 
-启动:
-uv run python -m eval.core.judge_calibrate
+用法示例::
+
+    uv run python -m eval.core.judge_calibrate
+
+公共接口：
+    - _make_hallucination: 注入幻觉（术语替换 → 结构破坏）
+    - run_calibration: 完整校准工作流
 """
 
 import json

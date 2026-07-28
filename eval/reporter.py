@@ -1,4 +1,23 @@
-"""聚合、分组、诊断分类、JSON 输出。"""
+"""评估报告生成：JSON 文件写入 + history.jsonl 追加。
+
+核心特性：
+    - generate_report() 一站式写入：per_query.json / failures.json / summary.json / run_info.json / history.jsonl
+    - per_query.json 自动合并 Layer 1（检索指标 + 诊断）+ Layer 2（Judge 分数 + verdict + 阶段延迟）
+    - _build_history() 向 eval/results/check/history.jsonl 追加一行运行摘要（跨运行索引）
+    - _build_layer2_summary() 计算 Layer 2 聚合（5 项均值 + verdict 分布 + judge/generator errors）
+    - 终端输出职责已移交 LivePanel，reporter 仅做文件 I/O
+    - build_run_info() 含 git commit 快照 + 配置快照
+
+用法示例::
+
+    from eval.reporter import generate_report, build_run_info
+    run_info = build_run_info("bench.json", run_mode="full")
+    generate_report(layer1_output, results_dir, run_info, judge_results=judge_results, metrics_summary=metrics.summary_dict())
+
+公共接口：
+    - generate_report: 生成完整 eval 报告（5 个文件）
+    - build_run_info: 构建运行配置快照 dict
+"""
 
 import json
 import os

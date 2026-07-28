@@ -1,3 +1,21 @@
+"""滑动窗口文本切分，chunk_id 确定性生成。
+
+核心特性：
+    - 固定窗口大小 chunk_size，相邻窗口重叠 chunk_overlap 字符
+    - 单文档长度 ≤ chunk_size 时不做切分，chunk_index 固定为 0
+    - chunk_id 格式 {doc_id}:{chunk_index}，chunk_index 从 0 递增，切分策略不变时 ID 稳定
+
+用法示例::
+
+    from indexing import chunk
+    from indexing import Chunk, DocMetadata
+    docs = [Chunk(doc_id="doc/a", content="长文本...")]
+    chunks = chunk(docs, chunk_size=500, chunk_overlap=100)
+
+公共接口：
+    - chunk: 将 Chunk 列表按滑动窗口切分为更小的 Chunk 列表
+"""
+
 from copy import deepcopy
 from typing import List
 from dataclasses import replace

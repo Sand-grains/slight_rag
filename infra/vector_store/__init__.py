@@ -1,1 +1,1 @@
-# 向量存储后端 —— 未来迁入 retrieval/store.py + Milvus adapter
+"""向量存储后端 — 预留 retrieval/store.py 迁入 + Milvus adapter。"""

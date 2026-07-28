@@ -1,4 +1,24 @@
-"""双层缓存键构造 + Judge 缓存 get/set。Generator 缓存在 runner.py 中直接操作。"""
+"""双层缓存键构造 + Judge 缓存 get/set。
+
+核心特性：
+    - Generator 缓存键：generator:{query_id}:{context_hash}:{GENERATOR_CONFIG_HASH}
+    - Judge 缓存键：judge:{query_id}:{context_hash}:{GENERATOR_CONFIG_HASH}:{prompt_version}:{model_id}
+    - GENERATOR_CONFIG_HASH 为模块级常量（config.py），捕获 Generator 全部配置变更
+    - 废弃 answer_hash（temp > 0 时措辞抖动导致缓存永久失效）
+    - Generator 缓存在 runner.py 的 _evaluate_one 中直接操作 Redis，Judge 缓存通过 get_cached_result/set_cached_result 编排
+
+用法示例::
+
+    from eval.core.judge_cache import _judge_cache_key, _generator_cache_key, get_cached_result, set_cached_result
+    key = _judge_cache_key("Q001", context_str, "v1", "deepseek-chat")
+    cached = get_cached_result(key)  # → JudgeResult | None
+
+公共接口：
+    - _judge_cache_key: 构造 Judge 缓存键（4 参数，不含 answer）
+    - _generator_cache_key: 构造 Generator 缓存键
+    - get_cached_result: 查 Judge 缓存并记录命中/未命中
+    - set_cached_result: 写 Judge 缓存
+"""
 
 import hashlib
 from infra.cache import get_cache

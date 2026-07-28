@@ -1,4 +1,22 @@
-"""Layer 1: 检索评估编排。纯数学指标，不调 LLM。"""
+"""Layer 1 检索评估编排：两轮评估 + 诊断分类，纯数学指标，不调 LLM。
+
+核心特性：
+    - 第一轮：计算 6 项 IR 指标 + 诊断分类（accept / recall_miss / file_miss / ranking_miss / low_precision）
+    - 第二轮：对 low_precision 样本追加检测（判定是检索问题还是标注问题）
+    - CANDIDATE_K = TOP_K * 2，候选池比最终输出大，用于 ranking_miss 检测
+    - 聚合输出 LayerOutput（逐 query 结果 + 聚合指标 + 按 category/difficulty 分组）
+
+用法示例::
+
+    from eval.core.retrieval_layer import run_retrieval_eval
+    output = run_retrieval_eval(retriever, benchmark_items)
+    print(output.aggregate["recall_at_k"])  # → 0.8256
+
+公共接口：
+    - RetrievalEvalResult: 单条 query 的检索评估结果
+    - LayerOutput: 完整 Layer 1 输出（results + aggregate + by_category + by_difficulty）
+    - run_retrieval_eval: 执行完整两轮检索评估
+"""
 
 import statistics
 from dataclasses import dataclass, field

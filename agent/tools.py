@@ -1,3 +1,20 @@
+"""Agent 工具：RAGSearchTool —— 将检索管线暴露为 hello-agents Tool 协议。
+
+核心特性：
+    - 实现 hello_agents Tool 抽象（name / description / parameters / run）
+    - run() 接收 query → retriever.retrieve() → _build_context() 拼接上下文
+    - ToolParameter 定义 STRING 类型 query 参数
+
+用法示例::
+
+    from agent.tools import RAGSearchTool
+    tool = RAGSearchTool(retriever)
+    result = tool.run({"query": "什么是 RAG"})
+
+公共接口：
+    - RAGSearchTool: hello-agents Tool 子类，RAG 搜索工具
+"""
+
 from typing import Dict, Any, List
 from hello_agents.tools.base import Tool, ToolParameter
 from retrieval.retriever import Retriever

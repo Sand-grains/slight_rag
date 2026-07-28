@@ -1,4 +1,23 @@
-"""benchmark.json的加载, 校验, 默认值填充。"""
+"""Benchmark 加载、校验、默认值填充。
+
+核心特性：
+    - 从 JSON 文件加载 benchmark，支持 query_id / query / category / difficulty / relevance / reference_facts / expected_chunk_ids 字段
+    - 校验 expected_chunk_ids 与 VectorStore 当前 chunk_id 集合的一致性（chunk 切分变更 → 校验失败，强制重新标注）
+    - 缺失字段自动填充默认值，兼容旧版 benchmark 格式
+    - ground_truth 字段自动转换为 reference_facts（向前兼容）
+
+用法示例::
+
+    from eval.core.benchmark import load_benchmark, BenchmarkItem, BenchmarkLoadResult
+    result = load_benchmark("benchmark_private.json", valid_chunk_ids=store.chunk_ids)
+    for item in result.items:
+        print(item.query_id, item.query, item.expected_chunk_ids)
+
+公共接口：
+    - BenchmarkItem: 单条 benchmark 条目（所有字段已填充默认值）
+    - BenchmarkLoadResult: 加载结果（items + warnings + errors）
+    - load_benchmark: 加载并校验 benchmark JSON 文件
+"""
 
 import json
 from dataclasses import dataclass, field

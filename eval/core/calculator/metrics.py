@@ -1,4 +1,24 @@
-"""IR evaluation metrics. Pure functions, zero dependencies beyond math."""
+"""IR 评估指标：Recall、Precision、Hit、MRR、MAP、DCG、NDCG。
+
+核心特性：
+    - 全部为纯函数，零外部依赖（仅 math 标准库）
+    - 每个函数输入 retrieved_ids + relevant_ids / relevance_map + k，返回 float 或 int
+    - 处理空输入的边界情况（空列表 / 空集合返回 0.0）
+
+用法示例::
+
+    from eval.core.calculator.metrics import recall_at_k, ndcg_at_k
+    r = recall_at_k(["c1", "c2", "c3"], {"c1", "c4"}, k=3)  # → 0.5
+
+公共接口：
+    - recall_at_k: |retrieved[:k] ∩ relevant| / |relevant|
+    - precision_at_k: |retrieved[:k] ∩ relevant| / k
+    - hit_at_k: 二值，前 k 个是否至少命中一个
+    - mrr: 1 / 第一个相关 chunk 的排名
+    - average_precision: 各相关位置处 Precision 的均值
+    - dcg_at_k: 折损累积增益（多级相关度 + 位置折损）
+    - ndcg_at_k: 归一化 DCG（DCG / IDCG）
+"""
 
 import math
 

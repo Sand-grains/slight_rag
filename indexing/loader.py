@@ -1,3 +1,19 @@
+"""文档加载器：按文件后缀分发，产出未切分的原始 Chunk 列表。
+
+核心特性：
+    - 支持 .txt / .md 纯文本格式，一次性读取全文
+    - doc_id 由文件相对于 data/ 的路径推导（去后缀、斜杠归一化）
+    - 每个文件产出一个 Chunk，后续由 chunker 做滑动窗口切分
+
+用法示例::
+
+    from indexing import load
+    chunks = load("data/Agent/README.md")  # → [Chunk(doc_id="Agent/README", ...)]
+
+公共接口：
+    - load: 按后缀分发加载，返回 Chunk 列表
+"""
+
 from pathlib import Path
 from typing import List
 from .chunk import Chunk, DocMetadata

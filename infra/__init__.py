@@ -1,1 +1,1 @@
-# infra/ 基础设施层 —— cache / vector_store / db
+"""基础设施层：缓存后端（Redis + Noop 降级）、数据库、向量存储抽象。"""

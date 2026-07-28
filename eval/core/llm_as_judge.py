@@ -1,4 +1,27 @@
-"""Layer 2: LLM-as-Judge。两次 LLM 调用 + compute_verdict 纯函数。"""
+"""Layer 2 LLM-as-Judge：faithfulness + quality 双调用并行评估。
+
+核心特性：
+    - judge_faithfulness：评估生成答案对检索上下文的忠实度（5 级离散锚点评分 + grounded_claims 提取）
+    - judge_quality：评估 answer_relevancy / context_precision / context_recall / answer_correctness 四个质量维度
+    - 内层 ThreadPoolExecutor(max_workers=2) 并行提交两个 Judge 调用
+    - _judge_with_retry：独立 1-worker 池 + future.result(timeout=deadline) + 指数退避（base_delay * 2^attempt * jitter）
+    - _call_llm：调用后 _extract_json 三层兜底（json.loads → markdown fence → regex brace），解析失败 record_parse_error + push_alert
+    - execute_verdict 纯函数：有值维度中 ≥ 0.75 的比例 → pass / partial / fail
+    - eval 场景 temperature=0（透传），确保 Judge 评分可复现
+    - JudgeResult 含 4 个阶段延迟字段，向前兼容旧缓存（新字段默认 None）
+
+用法示例::
+
+    from eval.core.llm_as_judge import run_judge, JudgeResult, execute_verdict
+    result = run_judge("Q001", query, chunks, answer, reference_facts, temperature=0.0)
+    print(result.faithfulness, result.verdict)
+
+公共接口：
+    - JudgeResult: 单条 query 的完整评估结果（5 项分数 + verdict + 异常信息 + 阶段延迟）
+    - run_judge: 完整双调用 Judge 流程（含缓存查/写 + 并行提交 + verdict 计算）
+    - execute_verdict: 纯函数，分数 dict → pass/partial/fail
+    - JudgeFailedError: Judge LLM 调用重试耗尽后抛出的异常
+"""
 
 import json
 import logging

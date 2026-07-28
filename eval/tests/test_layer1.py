@@ -1,4 +1,8 @@
-"""Layer 1 检索评估端到端测试。"""
+"""Layer 1 检索评估端到端测试脚本。
+
+手动验证检索管线 + IR 指标计算 + 诊断分类的端到端正确性。
+"""
+
 from eval.core.benchmark import load_benchmark
 from eval.core.retrieval_layer import run_retrieval_eval
 from eval.reporter import generate_report, build_run_info

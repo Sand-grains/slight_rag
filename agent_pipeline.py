@@ -1,3 +1,18 @@
+"""Agent 管线入口脚本：索引 → 检索工具 → SimpleAgent → 交互式问答。
+
+核心特性：
+    - 使用 hello-agents 框架（HelloAgentsLLM + SimpleAgent + ToolRegistry）
+    - 将 RAGSearchTool 注册为 agent 工具
+    - 支持交互式终端问答循环
+
+用法示例::
+
+    uv run python agent_pipeline.py
+
+公共接口：
+    - main: 管线编排入口
+"""
+
 from pathlib import Path
 from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL  # 先加载 .env，确保后续导入的库能读到环境变量
 from hello_agents import HelloAgentsLLM, SimpleAgent, ToolRegistry

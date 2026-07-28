@@ -1,9 +1,17 @@
-"""标注辅助脚本：按 source_doc 分组，逐条标注 relevance / category / difficulty。
+"""Benchmark 标注辅助脚本：按 source_doc 分组，逐条交互式标注。
 
-- 按 chunk_index（而非顺序序号）定位 chunk，输入 "20" 即指 chunk_id 为 "...:20" 的那块
-- 每条 prompt 输入 e 可跳过当前条，已填的字段会保留
-- 同一文档的 chunk 列表只打印一次，多个 question 共享
-- 每条标注完毕立即写回 benchmark_private.json
+核心特性：
+    - 按 chunk_index（非 enumerate 顺序号）定位 chunk——输入 "20" 即指 chunk_id 为 "...:20" 的那块
+    - 逐块标注 relevance、category、difficulty，每步可 e 退出
+    - 断点续标：is_annotated() 跳过已完成条目
+    - 同一文档的 chunk 列表只打印一次，多个 question 共享显示
+
+用法示例::
+
+    uv run python annotate_helper.py
+
+公共接口（可直接 import 使用）：
+    无（独立脚本，不可作为模块导入）
 """
 
 import json

@@ -1,6 +1,24 @@
-"""CLI 主入口：test_mode 分支 + --compare 对比。
+"""Eval CLI 主入口：retrieval / full 两种模式 + --compare 对比。
 
-用法: cd D:\Pycharm\slight_rag
+核心特性：
+    - --mode retrieval：仅 Layer 1 检索评估（不调 LLM，免费），LivePanel.render_final() 输出终端报告
+    - --mode full：Layer 1 + Layer 2 完整评估（调 Judge LLM，计费），LivePanel daemon 实时面板 + 最终报告
+    - --compare RUN_A RUN_B：对比两次运行的指标差异
+    - 外层 ThreadPoolExecutor（max_workers=5）控 query 级并发，_evaluate_one 做 per-query 隔离
+    - _load_previous_run() 加载最近一次 per_query.json 作为 Delta 基线
+
+用法示例::
+
+    uv run python -m eval.runner --mode retrieval
+    uv run python -m eval.runner --mode full
+    uv run python -m eval.runner --compare 2026-07-26_120000 2026-07-26_150000
+
+公共接口：
+    - run_retrieval_mode: Layer 1 检索评估
+    - run_full_mode: Layer 1 + Layer 2 完整评估（含 LivePanel）
+    - run_compare: 对比两次运行
+    - main: argparse CLI 入口
+
 默认读 benchmark_private.json，可用 --benchmark 指定其他文件。结果写入 eval/results/<timestamp>/
     # 仅 Layer 1（检索指标，不调 LLM，免费）
     uv run python -m eval.runner --mode retrieval
