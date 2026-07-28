@@ -90,7 +90,7 @@ def _load_previous_run() -> dict[str, dict] | None:
 def _evaluate_one(item, retriever, generator):
     """单条 query 的完整 eval。含 Generator 缓存 + 阶段打点。try/except 隔离。"""
     from eval.core.llm_as_judge import run_judge, JudgeResult
-    from eval.core.formatter import get_formatter, build_judge_context
+    from eval.core.judge_formatter import get_formatter, build_judge_context
     from eval.core.judge_cache import _generator_cache_key
     from eval.core.monitor_metrics import get_metrics
     from eval.core.live_panel import get_panel
