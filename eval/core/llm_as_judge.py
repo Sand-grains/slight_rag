@@ -14,12 +14,12 @@ from openai import OpenAI
 from eval.core.calculator.utils import _extract_json, _clamp_score
 from eval.core.formatter import Formatter, build_judge_context, get_formatter
 from eval.core.judge_cache import _judge_cache_key, get_cached_result, set_cached_result
+from eval.core.live_panel import get_panel
 from config import (LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, EVAL_LLM_MODEL_ID,
                     JUDGE_MAX_RETRIES, JUDGE_BASE_DELAY, JUDGE_DEADLINE, EVAL_MAX_WORKERS)
 
 class JudgeFailedError(Exception):
     """Judge LLM 调用重试耗尽后抛出。"""
-
 
 RETRYABLE_ERRORS = (
     openai.RateLimitError,       # 429
@@ -43,6 +43,11 @@ class JudgeResult:
     parse_error: str | None = None
     judge_error: str | None = None
     generator_error: str | None = None
+    # 阶段延迟（由 runner / run_judge 填入）
+    retrieve_ms: float | None = None
+    generate_ms: float | None = None
+    judge_faithfulness_ms: float | None = None
+    judge_quality_ms: float | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False, default=str)
@@ -52,7 +57,9 @@ class JudgeResult:
         return cls(**json.loads(json_str))
 
 
-def _call_llm(client: OpenAI, model: str, prompt: str) -> dict:
+def _call_llm(client: OpenAI, model: str, prompt: str,
+             temperature: float = 0.0, query_id: str = "",
+             call_type: str = "") -> dict:
     """调用 LLM 并解析 JSON 输出（经 _extract_json 三层兜底）。
 
     Returns:
@@ -65,10 +72,12 @@ def _call_llm(client: OpenAI, model: str, prompt: str) -> dict:
                 "role": "user", "content": prompt
             }
         ],
+        temperature=temperature,
     )
     try:
         from eval.core.monitor_metrics import get_metrics
-        get_metrics().record_llm_call()
+        if call_type:
+            get_metrics().record_llm_call(call_type)
         if response.usage:
             get_metrics().record_tokens(
                 response.usage.prompt_tokens,
@@ -82,6 +91,15 @@ def _call_llm(client: OpenAI, model: str, prompt: str) -> dict:
     try:
         return _extract_json(text)
     except (json.JSONDecodeError, ValueError) as e:
+        from eval.core.monitor_metrics import get_metrics
+        try:
+            get_metrics().record_parse_error()
+        except ImportError:
+            pass
+        if query_id:
+            panel = get_panel()
+            if panel:
+                panel.push_alert(query_id, f"Judge {call_type} parse error: {e}")
         return {"error": str(e), "raw": text[:500]}
 
 
@@ -91,6 +109,8 @@ def _judge_with_retry(
     max_retries: int = 3,
     base_delay: float = 1.0,
     deadline: float = 120.0,
+    query_id: str = "",
+    judge_type: str = "",
 ):
     """对 judge_fn 做指数退避重试 + deadline 超时。
 
@@ -108,6 +128,16 @@ def _judge_with_retry(
                 last_error = TimeoutError(f"Judge call timed out after {deadline}s")
             except RETRYABLE_ERRORS as e:
                 if isinstance(e, openai.RateLimitError):
+                    from eval.core.monitor_metrics import get_metrics
+                    try:
+                        get_metrics().record_retry()
+                    except ImportError:
+                        pass
+                    if query_id:
+                        panel = get_panel()
+                        if panel:
+                            panel.push_alert(query_id,
+                                f"Judge {judge_type} 429 限流 第{attempt + 1}/{max_retries}次重试")
                     logging.warning(
                         "DeepSeek 限流 (429)，第 %d/%d 次尝试",
                         attempt + 1, max_retries,
@@ -116,6 +146,11 @@ def _judge_with_retry(
             if attempt < max_retries - 1:
                 delay = base_delay * (2 ** attempt) * random.uniform(0.5, 1.5)
                 time.sleep(delay)
+        if query_id:
+            panel = get_panel()
+            if panel:
+                panel.push_alert(query_id,
+                    f"Judge {judge_type} 重试耗尽: {type(last_error).__name__}")
         raise JudgeFailedError(
             f"Judge call failed after {max_retries} retries: {last_error}"
         )
@@ -126,10 +161,12 @@ def _judge_with_retry(
 def judge_faithfulness(
     client: OpenAI, model: str, formatter: Formatter,
     query: str, context_str: str, answer: str,
+    temperature: float = 0.0, query_id: str = "",
 ) -> tuple[float | None, list[dict], str | None]:
     """调用 1：评估 faithfulness，返回 (分数, grounded_claims, 解析错误描述)。"""
     prompt = formatter.build_faithfulness_prompt(query, context_str, answer)
-    result = _call_llm(client, model, prompt)
+    result = _call_llm(client, model, prompt, temperature=temperature,
+                       query_id=query_id, call_type="judge_faithfulness")
 
     if "error" in result:
         return None, [], result.get("error")
@@ -146,6 +183,7 @@ def judge_faithfulness(
 def judge_quality(
     client: OpenAI, model: str, formatter: Formatter,
     query: str, context_str: str, answer: str, reference_facts: str,
+    temperature: float = 0.0, query_id: str = "",
 ) -> tuple[float | None, float | None, float | None, float | None, str | None]:
     """调用 2：评估四个质量维度。
 
@@ -153,7 +191,8 @@ def judge_quality(
         (answer_relevancy, context_precision, context_recall, answer_correctness, 解析错误描述)
     """
     prompt = formatter.build_quality_prompt(query, context_str, answer, reference_facts)
-    result = _call_llm(client, model, prompt)
+    result = _call_llm(client, model, prompt, temperature=temperature,
+                       query_id=query_id, call_type="judge_quality")
 
     if "error" in result:
         return None, None, None, None, result.get("error")
@@ -228,6 +267,7 @@ def run_judge(
     client: OpenAI | None = None,
     model: str | None = None,
     formatter: Formatter | None = None,
+    temperature: float = 0.0,
 ) -> JudgeResult:
     """执行完整的双调用 Judge 流程，返回 JudgeResult。"""
     if client is None:
@@ -240,10 +280,9 @@ def run_judge(
     context_str = build_judge_context(chunks)
     answer_str = answer or "（模型未生成回答）"
 
-    # 查缓存
+    # 查缓存（v5: 不再包含 answer_hash）
     prompt_version = formatter.prompt_version
-    cache_key = _judge_cache_key(query_id, context_str, answer_str,
-                                 prompt_version, model)
+    cache_key = _judge_cache_key(query_id, context_str, prompt_version, model)
     cached = get_cached_result(cache_key)
     if cached is not None:
         return cached
@@ -251,27 +290,34 @@ def run_judge(
     result = JudgeResult(query_id=query_id)
 
     # 内层 2-worker 池：faithfulness + quality 并行
+    t_judge_start = time.time()
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="judge") as pool:
         faith_future = pool.submit(
             _judge_with_retry, judge_faithfulness,
-            (client, model, formatter, query, context_str, answer_str),
+            (client, model, formatter, query, context_str, answer_str,
+             temperature, query_id),
             JUDGE_MAX_RETRIES, JUDGE_BASE_DELAY, JUDGE_DEADLINE,
+            query_id, "faithfulness",
         )
         quality_future = pool.submit(
             _judge_with_retry, judge_quality,
-            (client, model, formatter, query, context_str, answer_str, reference_facts),
+            (client, model, formatter, query, context_str, answer_str,
+             reference_facts, temperature, query_id),
             JUDGE_MAX_RETRIES, JUDGE_BASE_DELAY, JUDGE_DEADLINE,
+            query_id, "quality",
         )
 
         try:
             faith, claims, err1 = faith_future.result()
         except JudgeFailedError as e:
             faith, claims, err1 = None, [], str(e)
+        result.judge_faithfulness_ms = (time.time() - t_judge_start) * 1000
 
         try:
             ar, cp, cr, ac, err2 = quality_future.result()
         except JudgeFailedError as e:
             ar, cp, cr, ac, err2 = None, None, None, None, str(e)
+        result.judge_quality_ms = (time.time() - t_judge_start) * 1000
 
     result.faithfulness = faith
     result.grounded_claims = claims
