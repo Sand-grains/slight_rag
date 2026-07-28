@@ -5,6 +5,14 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+def _mean_of(values: list) -> Optional[float]:
+    """非 None 值的均值。全为 None 时返回 None。"""
+    present = [v for v in values if v is not None]
+    if not present:
+        return None
+    return sum(present) / len(present)
+
+
 @dataclass
 class MonitorMetrics:
     # == Token ==
@@ -145,13 +153,12 @@ class MonitorMetrics:
         valid = [r for r in results if r.faithfulness is not None]
         if not valid:
             return {}
-        n = len(valid)
         return {
-            "faithfulness": sum(r.faithfulness or 0 for r in valid) / n,
-            "answer_relevancy": sum(r.answer_relevancy or 0 for r in valid) / n,
-            "context_precision": sum(r.context_precision or 0 for r in valid) / n,
-            "context_recall": sum(r.context_recall or 0 for r in valid) / n,
-            "answer_correctness": sum(r.answer_correctness or 0 for r in valid) / n,
+            "faithfulness": _mean_of([r.faithfulness for r in valid]),
+            "answer_relevancy": _mean_of([r.answer_relevancy for r in valid]),
+            "context_precision": _mean_of([r.context_precision for r in valid]),
+            "context_recall": _mean_of([r.context_recall for r in valid]),
+            "answer_correctness": _mean_of([r.answer_correctness for r in valid]),
         }
 
     def verdict_distribution(self) -> dict[str, int]:
