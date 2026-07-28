@@ -18,8 +18,8 @@ def generate_report(output: LayerOutput, results_dir: str, run_info: dict,
         output: Layer 1 评估完整输出
         results_dir: 结果输出目录
         run_info: 运行配置快照
-        judge_results: Layer 2 JudgeResult 列表（可选，full mode 时传入）
-        metrics_summary: MonitorMetrics.summary_dict()（可选，full mode 时传入）
+        judge_results: Layer 2 JudgeResult 列表(可选, full mode 时传入)
+        metrics_summary: MonitorMetrics.summary_dict()(可选, full mode 时传入)
     """
     os.makedirs(results_dir, exist_ok=True)
 
@@ -46,11 +46,15 @@ def generate_report(output: LayerOutput, results_dir: str, run_info: dict,
     # run_info.json: 配置快照
     _write_json(os.path.join(results_dir, "run_info.json"), run_info)
 
+    # per_query.json: 合并 Layer 2 数据
+    if judge_results is not None:
+        for jr in judge_results:
+            if jr.query_id in per_query:
+                per_query[jr.query_id].update(_serialize_judge_result(jr))
+        _write_json(os.path.join(results_dir, "per_query.json"), per_query)
+
     # history.jsonl: 追加一行
     _build_history(results_dir, output, run_info, judge_results, metrics_summary)
-
-    # 终端输出
-    _print_summary(output)
 
     return results_dir
 
@@ -77,28 +81,23 @@ def _serialize_result(r: RetrievalEvalResult) -> dict:
     }
 
 
-def _print_summary(output: LayerOutput):
-    """终端打印聚合结果。"""
-    agg = output.aggregate
-    if not agg:
-        print("无评估结果。")
-        return
-
-    print("\n" + "=" * 60)
-    print("Layer 1 检索评估结果")
-    print("=" * 60)
-    k = _k()
-    print(f"  {'Query 数':<14} {agg['num_queries']}")
-    print(f"  {f'Recall@{k}':<14} {agg['recall_at_k']:.4f}")
-    print(f"  {f'Precision@{k}':<14} {agg['precision_at_k']:.4f}")
-    print(f"  {f'Hit@{k}':<14} {agg['hit_at_k']:.4f}")
-    print(f"  {'MRR':<14} {agg['mrr']:.4f}")
-    print(f"  {f'MAP@{k}':<14} {agg['map_at_k']:.4f}")
-    print(f"  {f'NDCG@{k}':<14} {agg['ndcg_at_k']:.4f}")
-    print(f"\n  诊断分布:")
-    for label, count in agg["diagnosis_distribution"].items():
-        print(f"    {label}: {count}")
-    print("=" * 60 + "\n")
+def _serialize_judge_result(jr) -> dict:
+    """序列化 JudgeResult 中需写入 per_query.json 的字段。"""
+    return {
+        "faithfulness": jr.faithfulness,
+        "answer_relevancy": jr.answer_relevancy,
+        "context_precision": jr.context_precision,
+        "context_recall": jr.context_recall,
+        "answer_correctness": jr.answer_correctness,
+        "verdict": jr.verdict,
+        "parse_error": jr.parse_error,
+        "judge_error": jr.judge_error,
+        "generator_error": jr.generator_error,
+        "retrieve_ms": jr.retrieve_ms,
+        "generate_ms": jr.generate_ms,
+        "judge_faithfulness_ms": jr.judge_faithfulness_ms,
+        "judge_quality_ms": jr.judge_quality_ms,
+    }
 
 
 def _build_history(results_dir: str, output: LayerOutput, run_info: dict,
@@ -133,8 +132,22 @@ def _build_history(results_dir: str, output: LayerOutput, run_info: dict,
         line["context_recall_mean"] = l2.get("context_recall_mean")
         line["answer_correctness_mean"] = l2.get("answer_correctness_mean")
     if metrics_summary is not None:
-        line["cache_hit_rate"] = metrics_summary.get("cache_hit_rate")
+        line["generator_cache_hit_rate"] = metrics_summary.get("generator_cache_hit_rate")
+        line["judge_cache_hit_rate"] = metrics_summary.get("judge_cache_hit_rate")
         line["estimated_cost_usd"] = metrics_summary.get("estimated_cost_usd")
+        line["retry_count"] = metrics_summary.get("retry_count")
+        line["parse_error_count"] = metrics_summary.get("parse_error_count")
+        line["generator_llm_calls"] = metrics_summary.get("generator_llm_calls")
+        line["judge_faithfulness_calls"] = metrics_summary.get("judge_faithfulness_calls")
+        line["judge_quality_calls"] = metrics_summary.get("judge_quality_calls")
+        line["stage_retrieve_p50"] = metrics_summary.get("stage_retrieve_p50")
+        line["stage_retrieve_p95"] = metrics_summary.get("stage_retrieve_p95")
+        line["stage_generate_p50"] = metrics_summary.get("stage_generate_p50")
+        line["stage_generate_p95"] = metrics_summary.get("stage_generate_p95")
+        line["stage_judge_faithfulness_p50"] = metrics_summary.get("stage_judge_faithfulness_p50")
+        line["stage_judge_faithfulness_p95"] = metrics_summary.get("stage_judge_faithfulness_p95")
+        line["stage_judge_quality_p50"] = metrics_summary.get("stage_judge_quality_p50")
+        line["stage_judge_quality_p95"] = metrics_summary.get("stage_judge_quality_p95")
     with open(history_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
