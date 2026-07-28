@@ -145,11 +145,11 @@ def _build_history(results_dir: str, output: LayerOutput, run_info: dict,
     }
     if judge_results is not None:
         l2 = _build_layer2_summary(judge_results)
-        line["faithfulness_mean"] = l2.get("faithfulness_mean")
-        line["answer_relevancy_mean"] = l2.get("answer_relevancy_mean")
-        line["context_precision_mean"] = l2.get("context_precision_mean")
-        line["context_recall_mean"] = l2.get("context_recall_mean")
-        line["answer_correctness_mean"] = l2.get("answer_correctness_mean")
+        line["faithfulness_avg"] = l2.get("faithfulness_avg")
+        line["answer_relevancy_avg"] = l2.get("answer_relevancy_avg")
+        line["context_precision_avg"] = l2.get("context_precision_avg")
+        line["context_recall_avg"] = l2.get("context_recall_avg")
+        line["answer_correctness_avg"] = l2.get("answer_correctness_avg")
     if metrics_summary is not None:
         line["generator_cache_hit_rate"] = metrics_summary.get("generator_cache_hit_rate")
         line["judge_cache_hit_rate"] = metrics_summary.get("judge_cache_hit_rate")
@@ -179,11 +179,11 @@ def _build_layer2_summary(judge_results: list) -> dict:
     return {
         "num_valid": n,
         "num_total": len(judge_results),
-        "faithfulness_mean": sum(j.faithfulness or 0 for j in valid) / n if n else None,
-        "answer_relevancy_mean": sum(j.answer_relevancy or 0 for j in valid) / n if n else None,
-        "context_precision_mean": sum(j.context_precision or 0 for j in valid) / n if n else None,
-        "context_recall_mean": sum(j.context_recall or 0 for j in valid) / n if n else None,
-        "answer_correctness_mean": sum(j.answer_correctness or 0 for j in valid) / n if n else None,
+        "faithfulness_avg": sum(j.faithfulness or 0 for j in valid) / n if n else None,
+        "answer_relevancy_avg": sum(j.answer_relevancy or 0 for j in valid) / n if n else None,
+        "context_precision_avg": sum(j.context_precision or 0 for j in valid) / n if n else None,
+        "context_recall_avg": sum(j.context_recall or 0 for j in valid) / n if n else None,
+        "answer_correctness_avg": sum(j.answer_correctness or 0 for j in valid) / n if n else None,
         "verdict_distribution": _count_verdicts(judge_results),
         "judge_errors": sum(1 for jr in judge_results if jr.judge_error),
         "generator_errors": sum(1 for jr in judge_results if jr.generator_error),
