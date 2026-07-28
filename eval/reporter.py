@@ -167,6 +167,8 @@ def _build_history(results_dir: str, output: LayerOutput, run_info: dict,
         line["stage_judge_faithfulness_p95"] = metrics_summary.get("stage_judge_faithfulness_p95")
         line["stage_judge_quality_p50"] = metrics_summary.get("stage_judge_quality_p50")
         line["stage_judge_quality_p95"] = metrics_summary.get("stage_judge_quality_p95")
+        line["stage_end_to_end_p50"] = metrics_summary.get("stage_end_to_end_p50")
+        line["stage_end_to_end_p95"] = metrics_summary.get("stage_end_to_end_p95")
     with open(history_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
