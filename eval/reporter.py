@@ -203,11 +203,6 @@ def build_run_info(benchmark_path: str, run_mode: str = "retrieval") -> dict:
     }
 
 
-def _k() -> int:
-    from config import TOP_K
-    return TOP_K
-
-
 def _write_json(path: str, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
