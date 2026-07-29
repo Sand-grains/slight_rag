@@ -37,7 +37,7 @@ from openai import OpenAI
 from eval.core.calculator.utils import _extract_json, _clamp_score
 from eval.core.judge_formatter import Formatter, build_judge_context, get_formatter
 from eval.core.judge_cache import _judge_cache_key, get_cached_result, set_cached_result
-from eval.core.live_panel import get_panel
+from eval.core.monitor_panel import get_panel
 from config import (LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, EVAL_LLM_MODEL_ID,
                     JUDGE_MAX_RETRIES, JUDGE_BASE_DELAY, JUDGE_DEADLINE, EVAL_MAX_WORKERS)
 

@@ -93,7 +93,7 @@ def _evaluate_one(item, retriever, generator):
     from eval.core.judge_formatter import get_formatter, build_judge_context
     from eval.core.judge_cache import _generator_cache_key
     from eval.core.monitor_metrics import get_metrics
-    from eval.core.live_panel import get_panel
+    from eval.core.monitor_panel import get_panel
     from infra.cache import get_cache as get_cache_backend
     from infra.config import REDIS_DEFAULT_TTL
 
@@ -148,7 +148,7 @@ def run_retrieval_mode(benchmark_path: str):
     from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
     from eval.core.monitor_metrics import get_metrics, reset_metrics
-    from eval.core.live_panel import LivePanel
+    from eval.core.monitor_panel import LivePanel
 
     reset_metrics()
     metrics = get_metrics()
@@ -193,7 +193,7 @@ def run_full_mode(benchmark_path: str):
     from eval.reporter import generate_report, build_run_info
     from eval.core.llm_as_judge import _get_client
     from eval.core.monitor_metrics import get_metrics, reset_metrics
-    from eval.core.live_panel import LivePanel, set_panel
+    from eval.core.monitor_panel import LivePanel, set_panel
 
     reset_metrics()
     metrics = get_metrics()
