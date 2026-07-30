@@ -19,28 +19,34 @@ import os
 import sys
 from collections import defaultdict
 
-from retrieval.store import VectorStore
+from retrieval.store import IndexStore
+from config import VECTOR_CACHE_DIR
 
 
 EXIT_KEY = "e"
 
 
-def load_benchmark_raw(path: str) -> list[dict]:
+def load_benchmark(path: str) -> list[dict]:
+    """加载原始 benchmark JSON，返回 list[dict]。
+
+    注意：与 eval/core/benchmark.py 的 load_benchmark() 不同——
+    后者返回经过校验和默认值填充的 BenchmarkLoadResult，此函数仅做 JSON 反序列化。
+    """
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def save_benchmark_raw(items: list[dict], path: str):
+def save_benchmark(items: list[dict], path: str):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
     print(f"  [已保存] {path}\n")
 
 
-def build_doc_index(store: VectorStore) -> dict[str, dict]:
+def build_doc_index(store: IndexStore) -> dict[str, dict]:
     """构建 doc_id → {chunk_index: Chunk} 的映射。"""
     index: dict[str, dict[int, object]] = defaultdict(dict)
     for c in store.chunks:
-        index[c.doc_id][c.doc_meta.chunk_index] = c
+        index[c.doc_id][c.origin_metadata.chunk_index] = c
     return index
 
 
@@ -161,7 +167,6 @@ def annotate_item(idx: int, item: dict, chunk_by_index: dict[int, object], sourc
 
 
 _PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-_VECTOR_CACHE = os.path.join(_PROJECT_DIR, ".vector_cache")
 _BENCHMARK_PATH = os.path.join(_PROJECT_DIR, "benchmark_private.json")
 
 
@@ -171,13 +176,13 @@ def main():
         sys.exit(1)
 
     print("加载索引...")
-    store = VectorStore.vector_restore(_VECTOR_CACHE)
+    store = IndexStore.vector_restore(VECTOR_CACHE_DIR)
     if store is None:
         print("错误: 索引缓存不存在，请先运行 agent_pipeline.py 构建索引")
         sys.exit(1)
 
     doc_index = build_doc_index(store)
-    items = load_benchmark_raw(_BENCHMARK_PATH)
+    items = load_benchmark(_BENCHMARK_PATH)
 
     # 按 source_doc 分组（保留原始顺序）
     groups: dict[str, list[tuple[int, dict]]] = defaultdict(list)
@@ -204,7 +209,7 @@ def main():
             if is_annotated(item):
                 continue
             annotate_item(idx, item, chunk_by_index, source_doc)
-            save_benchmark_raw(items, _BENCHMARK_PATH)
+            save_benchmark(items, _BENCHMARK_PATH)
 
         raw = input(f"  文档 '{source_doc}' 标注完毕，Enter 继续 / e 退出程序\n  > ").strip().lower()
         if raw == EXIT_KEY:

@@ -2,7 +2,7 @@
 
 核心特性：
     - 从 JSON 文件加载 benchmark，支持 query_id / query / category / difficulty / relevance / reference_facts / expected_chunk_ids 字段
-    - 校验 expected_chunk_ids 与 VectorStore 当前 chunk_id 集合的一致性（chunk 切分变更 → 校验失败，强制重新标注）
+    - 校验 expected_chunk_ids 与 IndexStore 当前 chunk_id 集合的一致性（chunk 切分变更 → 校验失败，强制重新标注）
     - 缺失字段自动填充默认值，兼容旧版 benchmark 格式
     - ground_truth 字段自动转换为 reference_facts（向前兼容）
 
@@ -10,7 +10,7 @@
 
     from eval.core.benchmark import load_benchmark, BenchmarkItem, BenchmarkLoadResult
     result = load_benchmark("benchmark_private.json", valid_chunk_ids=store.chunk_ids)
-    for item in result.items:
+    for item in result.valid_items:
         print(item.query_id, item.query, item.expected_chunk_ids)
 
 公共接口：
@@ -44,7 +44,7 @@ class BenchmarkItem:
 @dataclass
 class BenchmarkLoadResult:
     """加载结果：有效条目 + 校验信息。"""
-    items: list[BenchmarkItem] = field(default_factory=list)
+    valid_items: list[BenchmarkItem] = field(default_factory=list)
     missing_query_id: list[int] = field(default_factory=list)       # 自动生成 query_id 的条目索引
     missing_relevance: list[int] = field(default_factory=list)      # 使用默认 relevance=3 的条目索引
     missing_category: list[int] = field(default_factory=list)       # 填充 "unknown" 的条目索引
@@ -88,7 +88,7 @@ def load_benchmark(path: str, valid_chunk_ids: set[str] | None = None) -> Benchm
             if missing:
                 result.invalid_chunk_ids[idx] = missing
 
-        result.items.append(BenchmarkItem(
+        result.valid_items.append(BenchmarkItem(
             query_id=query_id,
             query=item.get("query", ""),
             reference_facts=reference_facts,

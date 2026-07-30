@@ -39,7 +39,7 @@ def _load_text(path: Path, base_dir: Path = Path("data")) -> List[Chunk]:
         doc_id = str(relative.with_suffix("")).replace("\\", "/")
     except ValueError:
         doc_id = path.stem
-    doc_meta = DocMetadata(
+    origin_metadata = DocMetadata(
         title=path.stem,
         author="sd",                            # 本地文档默认作者
         source=str(path),
@@ -47,7 +47,6 @@ def _load_text(path: Path, base_dir: Path = Path("data")) -> List[Chunk]:
     )
     return [Chunk(
         content=content,
-        retrieval_text=content,
         doc_id=doc_id,
-        doc_meta=doc_meta,
+        origin_metadata=origin_metadata,
     )]

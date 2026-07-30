@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from eval.core.benchmark import BenchmarkItem
 from eval.core.calculator.metrics import (
     recall_at_k, precision_at_k, hit_at_k,
-    mrr, average_precision, ndcg_at_k,
+    mrr, avg_precision, ndcg_at_k,
 )
 from retrieval.retriever import Retriever
 from retrieval.generator import _build_context
@@ -96,7 +96,7 @@ def _first_pass(retriever: Retriever, items: list[BenchmarkItem]) -> list[Retrie
         relevant_ids = set(item.expected_chunk_ids)
         retrieved_ids = [c.chunk_id for c in final_chunks]
         candidate_ids = [c.chunk_id for c in all_chunks]
-        retrieved_files = list({c.doc_meta.title + c.doc_meta.doc_type for c in final_chunks})
+        retrieved_files = list({c.origin_metadata.title + c.origin_metadata.doc_type for c in final_chunks})
 
         has_intersection = any(rid in relevant_ids for rid in retrieved_ids)
         has_candidate_intersection = any(rid in relevant_ids for rid in candidate_ids)
@@ -123,7 +123,7 @@ def _first_pass(retriever: Retriever, items: list[BenchmarkItem]) -> list[Retrie
             precision_at_k=precision_at_k(retrieved_ids, relevant_ids, TOP_K),
             hit_at_k=hit_at_k(retrieved_ids, relevant_ids, TOP_K),
             mrr=mrr(retrieved_ids, relevant_ids),
-            map_at_k=average_precision(retrieved_ids, relevant_ids, TOP_K),
+            map_at_k=avg_precision(retrieved_ids, relevant_ids, TOP_K),
             ndcg_at_k=ndcg_at_k(retrieved_ids, item.relevance, TOP_K),
             diagnosis=diagnosis,
             final_chunk_ids=retrieved_ids,

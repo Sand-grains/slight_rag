@@ -1,8 +1,8 @@
 """Eval CLI 主入口：retrieval / full 两种模式 + --compare 对比。
 
 核心特性：
-    - --mode retrieval：仅 Layer 1 检索评估（不调 LLM，免费），LivePanel.render_final() 输出终端报告
-    - --mode full：Layer 1 + Layer 2 完整评估（调 Judge LLM，计费），LivePanel daemon 实时面板 + 最终报告
+    - --mode retrieval：仅 Layer 1 检索评估（不调 LLM，免费），MonitorPanel.final_report() 输出终端报告
+    - --mode full：Layer 1 + Layer 2 完整评估（调 Judge LLM，计费），MonitorPanel daemon 实时面板 + 最终报告
     - --compare RUN_A RUN_B：对比两次运行的指标差异
     - 外层 ThreadPoolExecutor（max_workers=5）控 query 级并发，_evaluate_one 做 per-query 隔离
     - _load_previous_run() 加载最近一次 per_query.json 作为 Delta 基线
@@ -15,7 +15,7 @@
 
 公共接口：
     - run_retrieval_mode: Layer 1 检索评估
-    - run_full_mode: Layer 1 + Layer 2 完整评估（含 LivePanel）
+    - run_full_mode: Layer 1 + Layer 2 完整评估（含 MonitorPanel）
     - run_compare: 对比两次运行
     - main: argparse CLI 入口
 
@@ -41,10 +41,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-from retrieval.store import VectorStore
+from retrieval.store import IndexStore
 from retrieval.retriever import Retriever
 from retrieval.generator import Generator
-from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID, EVAL_MAX_WORKERS, GENERATOR_TEMPERATURE
+from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID, EVAL_THREADPOOL_WORKERS, GENERATOR_TEMPERATURE
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent  # eval/runner.py → eval/ → 项目根
 
@@ -56,7 +56,7 @@ def _get_outer_pool() -> ThreadPoolExecutor:
     global _OUTER_POOL
     if _OUTER_POOL is None:
         _OUTER_POOL = ThreadPoolExecutor(
-            max_workers=EVAL_MAX_WORKERS,
+            max_workers=EVAL_THREADPOOL_WORKERS,
             thread_name_prefix="eval-outer",
         )
     return _OUTER_POOL
@@ -91,7 +91,7 @@ def _evaluate_one(item, retriever, generator):
     """单条 query 的完整 eval。含 Generator 缓存 + 阶段打点。try/except 隔离。"""
     from eval.core.llm_as_judge import run_judge, JudgeResult
     from eval.core.judge_formatter import get_formatter, build_judge_context
-    from eval.core.judge_cache import _generator_cache_key
+    from eval.core.judge_cache import _cache_generator_key
     from eval.core.monitor_metrics import get_metrics
     from eval.core.monitor_panel import get_panel
     from infra.cache import get_cache as get_cache_backend
@@ -105,7 +105,7 @@ def _evaluate_one(item, retriever, generator):
 
         # Generator cache
         context_str = build_judge_context(chunks)
-        gen_cache_key = _generator_cache_key(item.query_id, context_str)
+        gen_cache_key = _cache_generator_key(item.query_id, context_str)
         cache_backend = get_cache_backend()
         gen_cached = cache_backend.get(gen_cache_key)
 
@@ -135,7 +135,7 @@ def _evaluate_one(item, retriever, generator):
     except Exception as e:
         panel = get_panel()
         if panel:
-            panel.push_alert(item.query_id, f"Generator {type(e).__name__}: {e}")
+            panel.alert(item.query_id, f"Generator {type(e).__name__}: {e}")
         jr = JudgeResult(query_id=item.query_id)
         jr.generator_error = f"evaluate_one failed: {e}"
         jr.verdict = "error"
@@ -143,18 +143,18 @@ def _evaluate_one(item, retriever, generator):
 
 
 def run_retrieval_mode(benchmark_path: str):
-    """仅对 Layer 1 retrieval 进行评估（v5: LivePanel 终端报告）。"""
+    """仅对 Layer 1 retrieval 进行评估（v5: MonitorPanel 终端报告）。"""
     from eval.core.benchmark import load_benchmark
     from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
     from eval.core.monitor_metrics import get_metrics, reset_metrics
-    from eval.core.monitor_panel import LivePanel
+    from eval.core.monitor_panel import MonitorPanel
 
     reset_metrics()
     metrics = get_metrics()
 
     print("加载索引...")
-    store = VectorStore.vector_restore()
+    store = IndexStore.vector_restore()
     if store is None:
         print("错误: 索引缓存不存在")
         sys.exit(1)
@@ -162,13 +162,13 @@ def run_retrieval_mode(benchmark_path: str):
 
     print(f"加载 benchmark: {benchmark_path}")
     result = load_benchmark(benchmark_path, valid_chunk_ids=store.chunk_ids)
-    items = result.items
+    items = result.valid_items
     total = len(items)
     print(f"  条目: {total}")
 
-    # LivePanel（仅 render_final，无 daemon 线程——retrieval 无 LLM，跑得太快）
+    # MonitorPanel（仅 final_report，无 daemon 线程——retrieval 无 LLM，跑得太快）
     previous_per_query = _load_previous_run()
-    panel = LivePanel(metrics, previous_per_query)
+    panel = MonitorPanel(metrics, previous_per_query)
     panel.set_total(total)
     panel.set_meta(benchmark_name=benchmark_path, eval_mode="retrieval")
 
@@ -177,7 +177,7 @@ def run_retrieval_mode(benchmark_path: str):
     metrics.layer1_results = output.results
 
     panel.query_count = total
-    panel.render_final()
+    panel.final_report()
 
     ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     results_dir = str(_PROJECT_ROOT / "eval" / "results" / "timeline" / ts)
@@ -187,19 +187,19 @@ def run_retrieval_mode(benchmark_path: str):
 
 
 def run_full_mode(benchmark_path: str):
-    """Layer 1 + Layer 2 完整评估（v5: LivePanel 终端监控）。"""
+    """Layer 1 + Layer 2 完整评估（v5: MonitorPanel 终端监控）。"""
     from eval.core.benchmark import load_benchmark
     from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
     from eval.core.llm_as_judge import _get_client
     from eval.core.monitor_metrics import get_metrics, reset_metrics
-    from eval.core.monitor_panel import LivePanel, set_panel
+    from eval.core.monitor_panel import MonitorPanel, set_panel
 
     reset_metrics()
     metrics = get_metrics()
 
     print("加载索引...")
-    store = VectorStore.vector_restore()
+    store = IndexStore.vector_restore()
     if store is None:
         print("错误: 索引缓存不存在")
         sys.exit(1)
@@ -211,7 +211,7 @@ def run_full_mode(benchmark_path: str):
 
     print(f"加载 benchmark: {benchmark_path}")
     result = load_benchmark(benchmark_path, valid_chunk_ids=store.chunk_ids)
-    items = result.items
+    items = result.valid_items
     total = len(items)
     print(f"  条目: {total}")
 
@@ -221,9 +221,9 @@ def run_full_mode(benchmark_path: str):
     # 模型预热：触达 embedding 模型加载（吸收 tqdm 进度条），避免打乱面板输出
     retriever.retrieve(items[0].query, top_k=TOP_K)
 
-    # 创建 LivePanel（所有 print 需在 start() 前完成，否则被 ANSI 清屏覆盖）
+    # 创建 MonitorPanel（所有 print 需在 start() 前完成，否则被 ANSI 清屏覆盖）
     print("启动监控面板...")
-    panel = LivePanel(metrics, previous_per_query)
+    panel = MonitorPanel(metrics, previous_per_query)
     set_panel(panel)
     panel.set_total(total)
     panel.set_meta(
@@ -272,7 +272,7 @@ def run_full_mode(benchmark_path: str):
         panel.stop()  # 幂等
 
     # 最终报告（终端）
-    panel.render_final()
+    panel.final_report()
 
     # 写入文件报告
     ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")

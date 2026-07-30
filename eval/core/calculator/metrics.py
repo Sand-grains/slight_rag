@@ -15,7 +15,7 @@
     - precision_at_k: |retrieved[:k] ∩ relevant| / k
     - hit_at_k: 二值，前 k 个是否至少命中一个
     - mrr: 1 / 第一个相关 chunk 的排名
-    - average_precision: 各相关位置处 Precision 的均值
+    - avg_precision: 各相关位置处 Precision 的均值
     - dcg_at_k: 折损累积增益（多级相关度 + 位置折损）
     - ndcg_at_k: 归一化 DCG（DCG / IDCG）
 """
@@ -68,7 +68,7 @@ def mrr(retrieved_ids: list[str], relevant_ids: set[str]) -> float:
     return 0.0
 
 
-def average_precision(retrieved_ids: list[str], relevant_ids: set[str], k: int) -> float:
+def avg_precision(retrieved_ids: list[str], relevant_ids: set[str], k: int) -> float:
     """平均精度：各相关 chunk 召回位置处 Precision 的均值。
 
     Mean of P@i at each rank where a relevant item appears.

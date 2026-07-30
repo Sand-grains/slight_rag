@@ -1,14 +1,14 @@
 from typing import List
 from openai import OpenAI
 from indexing.chunk import Chunk
-from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, PROMPT_TEMPLATE, GENERATOR_TEMPERATURE
+from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, GENERATOR_PROMPT_TEMPLATE, GENERATOR_TEMPERATURE
 
 
 def _build_context(chunks: List[Chunk]) -> str:
     """将检索到的 chunk 列表拼成带来源标记的上下文字符串"""
     parts = []
     for i, chunk in enumerate(chunks):
-        source = chunk.doc_meta.title or chunk.doc_meta.source or "未知来源"
+        source = chunk.origin_metadata.title or chunk.origin_metadata.source or "未知来源"
         parts.append(f"[来源{i + 1}] 文档: {source}\n{chunk.content}")  # 每个 chunk 标注序号和来源
     return "\n\n---\n\n".join(parts)                         # 用分隔线拼接多个 chunk
 
@@ -23,7 +23,7 @@ class Generator:
     def generate(self, query: str, context_chunks: List[Chunk], temperature: float = GENERATOR_TEMPERATURE) -> str:
         """构造 prompt 并调用 API 生成回答"""
         context_str = _build_context(context_chunks)             # chunk 列表 → 带来源标记的上下文字符串
-        prompt = PROMPT_TEMPLATE.format(
+        prompt = GENERATOR_PROMPT_TEMPLATE.format(
             context_str=context_str, query_str=query             # 将上下文和用户问题填入模板
         )
         response = self.client.chat.completions.create(

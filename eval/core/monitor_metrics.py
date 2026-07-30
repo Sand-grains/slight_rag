@@ -4,7 +4,7 @@
     - 阶段延迟 ×4：stage_retrieve_ms / stage_generate_ms / stage_judge_faithfulness_ms / stage_judge_quality_ms
     - 缓存拆分：Generator 缓存（hits/misses）+ Judge 缓存（hits/misses）独立计数
     - LLM 调用按类型拆分：generator_llm_calls / judge_faithfulness_calls / judge_quality_calls
-    - Per-query 原始结果：layer1_results / layer2_results（LivePanel 和 reporter 的唯一数据来源）
+    - Per-query 原始结果：layer1_results / layer2_results（MonitorPanel 和 reporter 的唯一数据来源）
     - 聚合方法内部浅拷贝后遍历（list(results)），线程安全
     - 模块级单例 get_metrics() / reset_metrics()，每次 run_full_mode 开头重置
 
@@ -138,7 +138,7 @@ class MonitorMetrics:
         return self.error_count / self.total_llm_calls if self.total_llm_calls > 0 else 0.0
 
     @property
-    def estimated_cost_usd(self) -> float:
+    def estimated_cost(self) -> float:
         input_cost = (self.total_input_tokens / 1000) * self.input_price_per_1k
         output_cost = (self.total_output_tokens / 1000) * self.output_price_per_1k
         return input_cost + output_cost
@@ -158,7 +158,7 @@ class MonitorMetrics:
     def output_tokens_p95(self) -> float:
         return self._p95(self.output_tokens_list)
 
-    # === 聚合方法（LivePanel 面板和 render_final 共用）===
+    # === 聚合方法（MonitorPanel 面板和 render_final 共用）===
     def layer1_means(self) -> dict[str, float]:
         results = list(self.layer1_results)
         if not results:
@@ -222,7 +222,7 @@ class MonitorMetrics:
             "total_output_tokens": self.total_output_tokens,
             "input_tokens_p95": self.input_tokens_p95,
             "output_tokens_p95": self.output_tokens_p95,
-            "estimated_cost_usd": round(self.estimated_cost_usd, 6),
+            "estimated_cost": round(self.estimated_cost, 6),
             "generator_cache_hit_rate": round(self.generator_cache_hit_rate, 4),
             "judge_cache_hit_rate": round(self.judge_cache_hit_rate, 4),
             "error_rate": round(self.error_rate, 4),
@@ -253,7 +253,7 @@ class MonitorMetrics:
         logging.info(
             "cost: $%.6f | Gen cache: %.0f%% | Judge cache: %.0f%% | errors: %d | "
             "retries: %d | parse err: %d | input P95: %d tok | output P95: %d tok",
-            self.estimated_cost_usd,
+            self.estimated_cost,
             self.generator_cache_hit_rate * 100,
             self.judge_cache_hit_rate * 100,
             self.error_count,
@@ -271,10 +271,10 @@ def get_metrics() -> MonitorMetrics:
     """模块级单例。"""
     global _metrics
     if _metrics is None:
-        from config import COST_INPUT_PRICE_PER_1K, COST_OUTPUT_PRICE_PER_1K
+        from config import COST_INPUT_1K_PRICE, COST_OUTPUT_1K_PRICE
         _metrics = MonitorMetrics(
-            input_price_per_1k=COST_INPUT_PRICE_PER_1K,
-            output_price_per_1k=COST_OUTPUT_PRICE_PER_1K,
+            input_price_per_1k=COST_INPUT_1K_PRICE,
+            output_price_per_1k=COST_OUTPUT_1K_PRICE,
         )
     return _metrics
 

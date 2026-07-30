@@ -23,14 +23,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from retrieval.store import VectorStore
+from retrieval.store import IndexStore
 from retrieval.retriever import Retriever
 from retrieval.generator import Generator
 from eval.core.benchmark import load_benchmark
 from eval.core.llm_as_judge import run_judge, execute_verdict, _get_client
 from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID, _PROJECT_ROOT
 
-CALIBRATION_SAMPLES = 5
+CALIBRATION_SAMPLE_COUNT = 5
 MAX_ITERATIONS = 3
 
 SWAP_TIER_1 = [
@@ -59,7 +59,7 @@ def _make_hallucination(good_answer: str, query: str, use_tier2: bool = False) -
     return bad
 
 
-def _inject_wrong_chunks(store: VectorStore, query: str, retriever: Retriever) -> list:
+def _inject_wrong_chunks(store: IndexStore, query: str, retriever: Retriever) -> list:
     """类型 B: 错误chunk注入
     检索到正确 chunk 后，故意替换为不相关的 chunk。"""
     correct = retriever.retrieve(query, top_k=TOP_K)
@@ -77,7 +77,7 @@ def _inject_wrong_chunks(store: VectorStore, query: str, retriever: Retriever) -
 
 def run_calibrate() -> dict:
     """执行校准流程，返回校准报告。"""
-    store = VectorStore.vector_restore()
+    store = IndexStore.vector_restore()
     if store is None:
         print("错误: 索引缓存不存在")
         sys.exit(1)
@@ -87,7 +87,7 @@ def run_calibrate() -> dict:
     _get_client()  # 主线程预初始化
 
     result = load_benchmark("benchmark_private.json", valid_chunk_ids=store.chunk_ids)
-    samples = result.items[:CALIBRATION_SAMPLES]
+    samples = result.valid_items[:CALIBRATION_SAMPLE_COUNT]
 
     print(f"校准样本: {len(samples)} 条")
 

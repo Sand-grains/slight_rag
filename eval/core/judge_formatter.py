@@ -3,7 +3,7 @@
 核心特性：
     - Formatter 类加载并缓存 faithfulness.md / quality.md 两个 Judge prompt 模板
     - build_judge_context() 将 chunk 列表拼成带 [来源X] 标记的结构化上下文字符串
-    - prompt_version 由模板文件内容 SHA256 计算，Judge 缓存键使用此版本号
+    - prompt_version_hash 由模板文件内容 SHA256 计算，Judge 缓存键使用此版本号
     - 模块级 get_formatter() 单例，首次调用加载模板
 
 用法示例::
@@ -54,7 +54,7 @@ def build_judge_context(chunks: List[Chunk]) -> str:
 
     parts = []
     for i, chunk in enumerate(chunks, start=1):
-        source = chunk.doc_meta.title or chunk.doc_meta.source or "未知来源"
+        source = chunk.origin_metadata.title or chunk.origin_metadata.source or "未知来源"
         parts.append(
             f"[来源{i} | chunk_id: {chunk.chunk_id} | 文档: {source}]\n{chunk.content}"
         )
@@ -65,16 +65,16 @@ class Formatter:
     """Prompt 格式化器：加载模板并缓存，按需填充。"""
 
     def __init__(self):
-        self._faithfulness_tpl = _load_prompt("faithfulness.md")
-        self._quality_tpl = _load_prompt("quality.md")
-        f_prompt_hash = hashlib.sha256(self._faithfulness_tpl.encode()).hexdigest()[:8]
-        q_prompt_hash = hashlib.sha256(self._quality_tpl.encode()).hexdigest()[:8]
-        self.prompt_version = f"{f_prompt_hash}/{q_prompt_hash}"
+        self._faithfulness_prompt_template = _load_prompt("faithfulness.md")
+        self._quality_prompt_template = _load_prompt("quality.md")
+        f_prompt_hash = hashlib.sha256(self._faithfulness_prompt_template.encode()).hexdigest()[:8]
+        q_prompt_hash = hashlib.sha256(self._quality_prompt_template.encode()).hexdigest()[:8]
+        self.prompt_version_hash = f"{f_prompt_hash}/{q_prompt_hash}"
 
     def build_faithfulness_prompt(self, query: str, context_str: str, answer: str) -> str:
         """构建 faithfulness 评估 prompt（调用 1）。"""
         return _fill(
-            self._faithfulness_tpl,
+            self._faithfulness_prompt_template,
             query=query,
             context=context_str,
             answer=answer,
@@ -85,7 +85,7 @@ class Formatter:
     ) -> str:
         """构建质量评估 prompt（调用 2, 含 reference_facts）"""
         return _fill(
-            self._quality_tpl,
+            self._quality_prompt_template,
             query=query,
             context=context_str,
             answer=answer,
@@ -97,9 +97,9 @@ _formatter_instance: Formatter | None = None
 
 
 def get_formatter() -> Formatter:
-    """模块级单例, 保证 prompt_version 日志只打印一次。"""
+    """模块级单例, 保证 prompt_version_hash 日志只打印一次。"""
     global _formatter_instance
     if _formatter_instance is None:
         _formatter_instance = Formatter()
-        logging.info("Judge prompt version: %s", _formatter_instance.prompt_version)
+        logging.info("Judge prompt version: %s", _formatter_instance.prompt_version_hash)
     return _formatter_instance

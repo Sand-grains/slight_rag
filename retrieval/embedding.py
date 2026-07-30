@@ -15,7 +15,7 @@
 """
 
 from typing import List
-from config import EMBEDDING_MODEL          # 先加载配置（触发 load_dotenv()，设置 HF_ENDPOINT 等环境变量）
+from config import EMBEDDING_MODEL_PATH          # 先加载配置（触发 load_dotenv()，设置 HF_ENDPOINT 等环境变量）
 from sentence_transformers import SentenceTransformer  # 后导入模型库（此时环境变量已就绪）
 
 _model: SentenceTransformer | None = None  # 模块级单例，整个进程只加载一次模型
@@ -25,7 +25,7 @@ def _get_model() -> SentenceTransformer:
     """延迟加载模型：首次调用时从本地缓存加载，后续直接复用，避免重复加载"""
     global _model
     if _model is None:
-        _model = SentenceTransformer(EMBEDDING_MODEL)  # 首次加载模型到内存
+        _model = SentenceTransformer(EMBEDDING_MODEL_PATH)  # 首次加载模型到内存
     return _model
 
 

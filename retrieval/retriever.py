@@ -9,28 +9,26 @@
 用法示例::
 
     from retrieval import Retriever
-    from retrieval.store import VectorStore
-    store = VectorStore.vector_restore()
+    from retrieval.store import IndexStore
+    store = IndexStore.vector_restore()
     retriever = Retriever(store)
     chunks = retriever.retrieve("什么是 RAG", top_k=5)
 
 公共接口：
-    - Retriever: 双路检索器，持有 VectorStore 引用
+    - Retriever: 双路检索器，持有 IndexStore 引用
 """
 
 from typing import List
 from indexing.chunk import Chunk
 from retrieval.embedding import embed
-from retrieval.store import VectorStore
-from config import TOP_K
-
-RRF_K = 60  # RRF 平滑常量，对排名变化不敏感
+from retrieval.store import IndexStore
+from config import TOP_K, RRF_K
 
 
 class Retriever:
     """检索层：双路检索（稠密 + 稀疏） → RRF 融合 → 返回 top_k chunks"""
 
-    def __init__(self, store: VectorStore):
+    def __init__(self, store: IndexStore):
         self.store = store
 
     def retrieve(self, query: str, top_k: int = TOP_K) -> List[Chunk]:

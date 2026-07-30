@@ -8,13 +8,13 @@
 
 用法示例::
 
-    from retrieval.store import VectorStore
-    store = VectorStore()
+    from retrieval.store import IndexStore
+    store = IndexStore()
     store.add(chunks, vectors)
     results = store.search_dense(query_vector, top_k=5)
 
 公共接口：
-    - VectorStore: 内存向量存储（add / search_dense / search_sparse / vector_persistence / vector_restore）
+    - IndexStore: 内存向量存储（batch_add / search_dense / search_sparse / vector_persistence / vector_restore）
     - chunk_ids (property): 库中所有 chunk_id 集合
     - chunks (property): 库中全部 chunk 只读视图
 """
@@ -26,14 +26,13 @@ from pathlib import Path
 from typing import List
 from rank_bm25 import BM25Okapi
 from indexing.chunk import Chunk
-from config import TOP_K
+from config import TOP_K, VECTOR_CACHE_DIR
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CACHE_DIR_NAME = str(_PROJECT_ROOT / ".vector_cache")
 
 
-class VectorStore:
+class IndexStore:
     """内存向量存储：numpy 稠密向量 + BM25 稀疏索引，双路检索"""
 
     def __init__(self):
@@ -52,7 +51,7 @@ class VectorStore:
         """返回库中全部 chunk 的只读视图。"""
         return list(self._chunks)
 
-    def add(self, documents: List[Chunk], vectors: List[List[float]]):
+    def batch_add(self, documents: List[Chunk], vectors: List[List[float]]):
         """将 chunk 及其向量追加入库，并重建 BM25 索引"""
         self._chunks.extend(documents)                   # 追加 chunk 到列表末尾
         new_vectors = numpy.array(vectors)               # List[List[float]] → 高效的二维 numpy 数组, 方便后续计算
@@ -61,7 +60,7 @@ class VectorStore:
         else:
             self._vectors = numpy.vstack([self._vectors, new_vectors])  # 非首次，沿行方向拼接
         # 重建 BM25 索引（每次 add 全量重建，542 chunk 级别开销可忽略）
-        self._bm25_tokenized = [list(jieba.cut(c.retrieval_text or c.content)) for c in self._chunks]
+        self._bm25_tokenized = [list(jieba.cut(c.content)) for c in self._chunks]
         self._bm25 = BM25Okapi(self._bm25_tokenized)
 
     def search_dense(self, query_vector: List[float], top_k: int = TOP_K) -> List[Chunk]:
@@ -94,7 +93,7 @@ class VectorStore:
         top_indices = top_indices[numpy.argsort(scores[top_indices])[::-1]]
         return [self._chunks[i] for i in top_indices]
 
-    def vector_persistence(self, cache_dir: str = CACHE_DIR_NAME):
+    def vector_persistence(self, cache_dir: str = VECTOR_CACHE_DIR):
         """将当前 chunks 和 vectors 持久化到磁盘"""
         path = Path(cache_dir)
         path.mkdir(exist_ok=True)
@@ -103,8 +102,8 @@ class VectorStore:
         numpy.save(path / "vectors.npy", self._vectors)
 
     @classmethod
-    def vector_restore(cls, cache_dir: str = CACHE_DIR_NAME) -> "VectorStore | None":
-        """从磁盘恢复 VectorStore，缓存不存在时返回 None"""
+    def vector_restore(cls, cache_dir: str = VECTOR_CACHE_DIR) -> "IndexStore | None":
+        """从磁盘恢复 IndexStore，缓存不存在时返回 None"""
         path = Path(cache_dir)
         chunks_file = path / "chunks.pkl"
         vectors_file = path / "vectors.npy"
@@ -115,6 +114,6 @@ class VectorStore:
             store._chunks = pickle.load(f)
         store._vectors = numpy.load(vectors_file)
         # 从 chunks 重建 BM25 索引
-        store._bm25_tokenized = [list(jieba.cut(c.retrieval_text or c.content)) for c in store._chunks]
+        store._bm25_tokenized = [list(jieba.cut(c.content)) for c in store._chunks]
         store._bm25 = BM25Okapi(store._bm25_tokenized)
         return store

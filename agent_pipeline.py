@@ -19,7 +19,7 @@ from hello_agents import HelloAgentsLLM, SimpleAgent, ToolRegistry
 from indexing.loader import load
 from indexing.chunker import chunk
 from retrieval.embedding import embed
-from retrieval.store import VectorStore
+from retrieval.store import IndexStore
 from retrieval.retriever import Retriever
 from agent.tools import RAGSearchTool
 
@@ -44,8 +44,8 @@ texts = [c.content for c in chunks]
 vectors = embed(texts)
 print(f"向量化完成，维度: {len(vectors[0])}")
 
-store = VectorStore()
-store.add(chunks, vectors)
+store = IndexStore()
+store.batch_add(chunks, vectors)
 print("向量入库完成")
 
 # ==================== Agent 层 ====================

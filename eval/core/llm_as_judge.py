@@ -5,7 +5,7 @@
     - judge_quality：评估 answer_relevancy / context_precision / context_recall / answer_correctness 四个质量维度
     - 内层 ThreadPoolExecutor(max_workers=2) 并行提交两个 Judge 调用
     - _judge_with_retry：独立 1-worker 池 + future.result(timeout=deadline) + 指数退避（base_delay * 2^attempt * jitter）
-    - _call_llm：调用后 _extract_json 三层兜底（json.loads → markdown fence → regex brace），解析失败 record_parse_error + push_alert
+    - _call_llm：调用后 _extract_json 三层兜底（json.loads → markdown fence → regex brace），解析失败 record_parse_error + alert
     - execute_verdict 纯函数：有值维度中 ≥ 0.75 的比例 → pass / partial / fail
     - eval 场景 temperature=0（透传），确保 Judge 评分可复现
     - JudgeResult 含 4 个阶段延迟字段，向前兼容旧缓存（新字段默认 None）
@@ -36,10 +36,10 @@ from openai import OpenAI
 
 from eval.core.calculator.utils import _extract_json, _clamp_score
 from eval.core.judge_formatter import Formatter, build_judge_context, get_formatter
-from eval.core.judge_cache import _judge_cache_key, get_cached_result, set_cached_result
+from eval.core.judge_cache import _cache_judge_key, get_judge_cache, set_judge_cache
 from eval.core.monitor_panel import get_panel
 from config import (LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, EVAL_LLM_MODEL_ID,
-                    JUDGE_MAX_RETRIES, JUDGE_BASE_DELAY, JUDGE_DEADLINE, EVAL_MAX_WORKERS)
+                    JUDGE_MAX_RETRY, JUDGE_BASE_DELAY, JUDGE_DEADLINE, EVAL_THREADPOOL_WORKERS)
 
 class JudgeFailedError(Exception):
     """Judge LLM 调用重试耗尽后抛出。"""
@@ -122,7 +122,7 @@ def _call_llm(client: OpenAI, model: str, prompt: str,
         if query_id:
             panel = get_panel()
             if panel:
-                panel.push_alert(query_id, f"Judge {call_type} parse error: {e}")
+                panel.alert(query_id, f"Judge {call_type} parse error: {e}")
         return {"error": str(e), "raw": text[:500]}
 
 
@@ -159,7 +159,7 @@ def _judge_with_retry(
                     if query_id:
                         panel = get_panel()
                         if panel:
-                            panel.push_alert(query_id,
+                            panel.alert(query_id,
                                 f"Judge {judge_type} 429 限流 第{attempt + 1}/{max_retries}次重试")
                     logging.warning(
                         "DeepSeek 限流 (429)，第 %d/%d 次尝试",
@@ -172,7 +172,7 @@ def _judge_with_retry(
         if query_id:
             panel = get_panel()
             if panel:
-                panel.push_alert(query_id,
+                panel.alert(query_id,
                     f"Judge {judge_type} 重试耗尽: {type(last_error).__name__}")
         raise JudgeFailedError(
             f"Judge call failed after {max_retries} retries: {last_error}"
@@ -271,8 +271,8 @@ def _get_client() -> OpenAI:
             base_url=LLM_BASE_URL,
             http_client=httpx.Client(
                 limits=httpx.Limits(
-                    max_keepalive_connections=max(20, EVAL_MAX_WORKERS * 4),
-                    max_connections=max(24, EVAL_MAX_WORKERS * 5),
+                    max_keepalive_connections=max(20, EVAL_THREADPOOL_WORKERS * 4),
+                    max_connections=max(24, EVAL_THREADPOOL_WORKERS * 5),
                 ),
                 timeout=httpx.Timeout(
                     connect=10.0,
@@ -313,9 +313,9 @@ def run_judge(
     answer_str = answer or "（模型未生成回答）"
 
     # 查缓存（v5: 不再包含 answer_hash）
-    prompt_version = formatter.prompt_version
-    cache_key = _judge_cache_key(query_id, context_str, prompt_version, model)
-    cached = get_cached_result(cache_key)
+    prompt_version_hash = formatter.prompt_version_hash
+    cache_key = _cache_judge_key(query_id, context_str, prompt_version_hash, model)
+    cached = get_judge_cache(cache_key)
     if cached is not None:
         return cached
 
@@ -327,14 +327,14 @@ def run_judge(
             _timed_judge_with_retry, judge_faithfulness,
             (client, model, formatter, query, context_str, answer_str,
              temperature, query_id),
-            JUDGE_MAX_RETRIES, JUDGE_BASE_DELAY, JUDGE_DEADLINE,
+            JUDGE_MAX_RETRY, JUDGE_BASE_DELAY, JUDGE_DEADLINE,
             query_id, "faithfulness",
         )
         quality_future = pool.submit(
             _timed_judge_with_retry, judge_quality,
             (client, model, formatter, query, context_str, answer_str,
              reference_facts, temperature, query_id),
-            JUDGE_MAX_RETRIES, JUDGE_BASE_DELAY, JUDGE_DEADLINE,
+            JUDGE_MAX_RETRY, JUDGE_BASE_DELAY, JUDGE_DEADLINE,
             query_id, "quality",
         )
 
@@ -383,6 +383,6 @@ def run_judge(
     result.verdict = execute_verdict(scores)
 
     # 写缓存
-    set_cached_result(cache_key, result)
+    set_judge_cache(cache_key, result)
 
     return result

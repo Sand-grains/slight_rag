@@ -5,7 +5,7 @@
     - per_query.json 自动合并 Layer 1（检索指标 + 诊断）+ Layer 2（Judge 分数 + verdict + 阶段延迟）
     - _build_history() 向 eval/results/check/history.jsonl 追加一行运行摘要（跨运行索引）
     - _build_layer2_summary() 计算 Layer 2 聚合（5 项均值 + verdict 分布 + judge/generator errors）
-    - 终端输出职责已移交 LivePanel，reporter 仅做文件 I/O
+    - 终端输出职责已移交 MonitorPanel，reporter 仅做文件 I/O
     - build_run_info() 含 git commit 快照 + 配置快照
 
 用法示例::
@@ -153,7 +153,7 @@ def _build_history(results_dir: str, output: LayerOutput, run_info: dict,
     if metrics_summary is not None:
         line["generator_cache_hit_rate"] = metrics_summary.get("generator_cache_hit_rate")
         line["judge_cache_hit_rate"] = metrics_summary.get("judge_cache_hit_rate")
-        line["estimated_cost_usd"] = metrics_summary.get("estimated_cost_usd")
+        line["estimated_cost"] = metrics_summary.get("estimated_cost")
         line["retry_count"] = metrics_summary.get("retry_count")
         line["parse_error_count"] = metrics_summary.get("parse_error_count")
         line["generator_llm_calls"] = metrics_summary.get("generator_llm_calls")
@@ -211,11 +211,11 @@ def _get_git_commit() -> str:
 
 def build_run_info(benchmark_path: str, run_mode: str = "retrieval") -> dict:
     """构建 run_info 配置快照。"""
-    from config import CHUNK_SIZE, CHUNK_OVERLAP, TOP_K as tk, LLM_MODEL_ID
+    from config import CHILD_CHUNK_SIZE, CHILD_OVERLAP, TOP_K as tk, LLM_MODEL_ID
     return {
         "timestamp": datetime.now().isoformat(),
-        "chunk_size": CHUNK_SIZE,
-        "chunk_overlap": CHUNK_OVERLAP,
+        "chunk_size": CHILD_CHUNK_SIZE,
+        "chunk_overlap": CHILD_OVERLAP,
         "top_k": tk,
         "model_id": LLM_MODEL_ID,
         "git_commit": _get_git_commit(),

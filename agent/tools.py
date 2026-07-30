@@ -30,7 +30,7 @@ class RAGSearchTool(Tool):
             description="当回答用户问题之前需要了解一定的背景知识时, 调用此工具在知识库中检索与用户问题相关的文档片段, "
                         "后续整合并返回上下文文本(已标注来源)"  # Agent根据description判断何时调用此工具
         )
-        self.retriever = retriever                                               # 持有检索层引用, 不在Tool内部直接操作VectorStore
+        self.retriever = retriever                                               # 持有检索层引用, 不在Tool内部直接操作IndexStore
 
     def get_parameters(self) -> List[ToolParameter]:
         return [

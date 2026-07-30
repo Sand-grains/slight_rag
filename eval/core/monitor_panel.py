@@ -1,29 +1,29 @@
-"""LivePanel：后台 daemon 线程终端实时面板。
+"""MonitorPanel：后台 daemon 线程终端实时面板。
 
 核心特性：
     - 后台 daemon 线程每 2 秒持锁浅拷贝 metrics → 格式化面板 → 清屏重绘（ANSI）或追加（plain）
-    - ANSI/plain 双模式，通过 .env 中 LIVE_PANEL_MODE 切换，兼容 PyCharm embedded terminal
+    - ANSI/plain 双模式，通过 .env 中 MONITOR_PANEL_MODE 切换，兼容 PyCharm embedded terminal
     - 面板显示：进度条 + Layer 1/Layer 2 指标 vs 上次 delta + 阶段延迟 P50/P75/P95 + 成本/缓存命中率 + 异常事件滚动区
     - 事件区仅显示异常（429 / parse_error / judge_error），不含 pass——成功的 query 不产生事件
-    - render_final() 跑完后打印完整最终报告，替代老旧散落 print
+    - final_report() 跑完后打印完整最终报告，替代老旧散落 print
     - stop() 幂等，finally 块安全调用
-    - 模块级单例 get_panel() / set_panel()，深层 judge 代码直接 push_alert() 避免参数层层透传
-    - push_alert() 无锁（deque.appendleft 在 CPython GIL 下原子）
+    - 模块级单例 get_panel() / set_panel()，深层 judge 代码直接 alert() 避免参数层层透传
+    - alert() 无锁（deque.appendleft 在 CPython GIL 下原子）
 
 用法示例::
 
-    from eval.core.live_panel import LivePanel, set_panel
-    panel = LivePanel(metrics, previous_per_query)
+    from eval.core.monitor_panel import MonitorPanel, set_panel
+    panel = MonitorPanel(metrics, previous_per_query)
     set_panel(panel)
     panel.set_total(len(items))
     panel.set_meta("bench.json", generator_model="deepseek-v4-flash", judge_model="deepseek-v4-pro")
     panel.start()
     # ... as_completed loop ...
     panel.stop()
-    panel.render_final()
+    panel.final_report()
 
 公共接口：
-    - LivePanel: 终端面板类（start / stop / query_done / push_alert / render_final）
+    - MonitorPanel: 终端面板类（start / stop / query_done / alert / final_report）
     - get_panel: 模块级单例获取
     - set_panel: 模块级单例设置
 """
@@ -55,7 +55,7 @@ if sys.platform == "win32":
         pass  # 非控制台环境（如管道重定向），ANSI 不可用
 
 DEFAULT_REFRESH_SEC = 2
-ALERT_MAXLEN = 20
+ALERT_QUEUE_MAXLEN = 20
 ALERT_DISPLAY_N = 5
 PROGRESS_BAR_WIDTH = 30
 
@@ -73,7 +73,7 @@ CURSOR_HIDE = "\033[?25l"
 CURSOR_SHOW = "\033[?25h"
 
 
-class LivePanel:
+class MonitorPanel:
     """后台 daemon 线程终端面板。持有 MonitorMetrics 引用 + 上次运行基线。"""
 
     def __init__(self, metrics: "MonitorMetrics", previous_per_query: dict | None = None):
@@ -87,7 +87,7 @@ class LivePanel:
         self._running: bool = False
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
-        self._alerts: deque[str] = deque(maxlen=ALERT_MAXLEN)
+        self._alerts: deque[str] = deque(maxlen=ALERT_QUEUE_MAXLEN)
         self._crashed: bool = False
 
         self._benchmark_name: str = ""
@@ -95,8 +95,8 @@ class LivePanel:
         self._judge_model: str = ""
         self._eval_mode: str = "full"
 
-        from config import LIVE_PANEL_MODE
-        self._mode: str = LIVE_PANEL_MODE
+        from config import MONITOR_PANEL_MODE
+        self._mode: str = MONITOR_PANEL_MODE
 
         self._redis_available: bool = self._check_redis()
         self._first_render: bool = True
@@ -141,7 +141,7 @@ class LivePanel:
         with self._lock:
             self.query_count += 1
 
-    def push_alert(self, query_id: str, message: str):
+    def alert(self, query_id: str, message: str):
         """入队一条警告事件。无锁——deque.appendleft 在 CPython GIL 下原子。"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         self._alerts.appendleft(f"{timestamp}  {query_id}  {message}")
@@ -162,7 +162,7 @@ class LivePanel:
                     qc = self.query_count
                     alerts = list(self._alerts)[:ALERT_DISPLAY_N]
                     alert_total = len(self._alerts)
-                    overflow = max(0, alert_total - ALERT_MAXLEN)
+                    overflow = max(0, alert_total - ALERT_QUEUE_MAXLEN)
                 self._render(l1, l2, stages, verdicts, deltas, qc, alerts, overflow)
                 time.sleep(DEFAULT_REFRESH_SEC)
         except Exception:
@@ -279,7 +279,7 @@ class LivePanel:
         cost_labels = ["Token", "Cost", "Generator Cache", "Judge Cache"]
         cost_values = [
             f"{self.metrics.total_input_tokens:,} in / {self.metrics.total_output_tokens:,} out",
-            f"¥{self.metrics.estimated_cost_usd:.2f}",
+            f"¥{self.metrics.estimated_cost:.2f}",
             (f"{self.metrics.generator_cache_hits} hit "
              f"({self.metrics.generator_cache_hit_rate:.1%})"),
             (f"{self.metrics.judge_cache_hits} hit "
@@ -304,9 +304,9 @@ class LivePanel:
         # Alerts
         alert_total = len(self._alerts)
         if overflow > 0:
-            lines.append(f"  {C_RED}⚠ 事件 ({alert_total}/{ALERT_MAXLEN})  {overflow} 条未显示{C_RESET}")
+            lines.append(f"  {C_RED}⚠ 事件 ({alert_total}/{ALERT_QUEUE_MAXLEN})  {overflow} 条未显示{C_RESET}")
         elif alert_total > 0:
-            lines.append(f"  {C_YELLOW}⚠ 事件 ({alert_total}/{ALERT_MAXLEN}){C_RESET}")
+            lines.append(f"  {C_YELLOW}⚠ 事件 ({alert_total}/{ALERT_QUEUE_MAXLEN}){C_RESET}")
         else:
             lines.append("  ⚠ 事件 (0)")
         for a in alerts:
@@ -320,7 +320,7 @@ class LivePanel:
     # Final report
     # ============================================================
 
-    def render_final(self):
+    def final_report(self):
         """跑完后打印最终报告。从 metrics 读取全部数据。"""
         try:
             m = self.metrics
@@ -414,7 +414,7 @@ class LivePanel:
             judge_rate = f"{m.judge_cache_hits} hit / {m.judge_cache_misses} miss ({m.judge_cache_hit_rate:.1%})"
             print(f"  Generator 缓存: {gen_rate}")
             print(f"  Judge 缓存:     {judge_rate}")
-            print(f"  估算成本:       ¥{m.estimated_cost_usd:.2f}")
+            print(f"  估算成本:       ¥{m.estimated_cost:.2f}")
 
             print()
             print("  错误明细")
@@ -509,14 +509,14 @@ class LivePanel:
 # Module-level singleton
 # ============================================================
 
-_panel: LivePanel | None = None
+_panel: MonitorPanel | None = None
 
 
-def get_panel() -> LivePanel | None:
+def get_panel() -> MonitorPanel | None:
     """模块级单例。未初始化时返回 None，调用方自行判空。"""
     return _panel
 
 
-def set_panel(panel: LivePanel) -> None:
+def set_panel(panel: MonitorPanel) -> None:
     global _panel
     _panel = panel

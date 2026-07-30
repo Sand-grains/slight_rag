@@ -9,11 +9,11 @@
 
     from indexing import Chunk, DocMetadata
     meta = DocMetadata(title="README", doc_type=".md")
-    c = Chunk(doc_id="docs/readme", chunk_id="docs/readme:0", content="# Hello", doc_meta=meta)
+    c = Chunk(doc_id="docs/readme", chunk_id="docs/readme:0", content="# Hello", origin_metadata=meta)
 
 公共接口：
     - DocMetadata: 文档级元数据（title / author / source / source_url / doc_type / language / chunk_index）
-    - Chunk: 通用文本容器（doc_id / chunk_id / content / retrieval_text / doc_meta / created_at）
+    - Chunk: 通用文本容器（doc_id / chunk_id / content / origin_metadata / created_at）
 """
 
 from dataclasses import dataclass, field
@@ -43,10 +43,9 @@ class Chunk:
     """管线流转的通用文本容器，承载一段文本及其来源元数据"""
     doc_id: str = ""             # 来源文档 ID (如 Knowledge/MainLine/RAG基础架构)
     chunk_id: str = ""           # 分块 ID, 确定性生成: {doc_id}:{chunk_index}
-    content: str = ""            # chunk 原始文本（给 LLM）
-    retrieval_text: str = ""     # 检索用文本（可选, 默认同 content, 后期可做预处理）
-    doc_meta: DocMetadata = field(default_factory=DocMetadata)  # 文档级元数据（共享引用）
+    content: str = ""            # chunk 原始文本（统一用于 embedding、检索、LLM 上下文）
+    origin_metadata: DocMetadata = field(default_factory=DocMetadata)  # 文档级元数据（共享引用）
     created_at: str = ""         # 创建时间, 增量索引用
 
     # ---- Phase B 写入 Milvus 时新增 ----
-    # embedding: list[float] | None   # 向量字段（当前由 VectorStore 单独管理）
+    # embedding: list[float] | None   # 向量字段（当前由 IndexStore 单独管理）
