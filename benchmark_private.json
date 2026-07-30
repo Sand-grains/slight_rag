@@ -3,9 +3,6 @@
     "query": "SELECT语句各子句的实际执行顺序是什么",
     "source_doc": "MySQL 基础",
     "expected_chunk_ids": [
-      "MySQL 基础:20",
-      "MySQL 基础:24",
-      "MySQL 基础:25"
     ],
     "expected_files": [
       "MySQL 基础.md"
@@ -14,9 +11,6 @@
     "category": "Database",
     "difficulty": "cross_section",
     "relevance": {
-      "MySQL 基础:20": 3,
-      "MySQL 基础:24": 2,
-      "MySQL 基础:25": 3
     },
     "reference_facts": "SELECT语句的实际执行顺序是：FROM（确定数据源）→ WHERE（行级过滤）→ GROUP BY（分组）→ HAVING（分组后过滤）→ SELECT（选择列）→ ORDER BY（排序）→ LIMIT（限制行数）。这与书写顺序不同。",
     "query_id": "Q0001"
@@ -25,8 +19,6 @@
     "query": "MySQL的四种事务隔离级别分别解决什么并发问题",
     "source_doc": "MySQL 基础",
     "expected_chunk_ids": [
-      "MySQL 基础:61",
-      "MySQL 基础:62"
     ],
     "expected_files": [
       "MySQL 基础.md"
@@ -35,8 +27,6 @@
     "category": "Database",
     "difficulty": "multi_chunk",
     "relevance": {
-      "MySQL 基础:61": 2,
-      "MySQL 基础:62": 3
     },
     "reference_facts": "READ UNCOMMITTED（读未提交）不解决任何并发问题；READ COMMITTED（读已提交）解决脏读；REPEATABLE READ（可重复读）解决脏读和不可重复读；SERIALIZABLE（串行化）解决脏读、不可重复读和幻读。InnoDB默认隔离级别是REPEATABLE READ。",
     "query_id": "Q0002"
@@ -45,7 +35,7 @@
     "query": "MySQL联合索引的最左前缀法则是什么，跳过最左列会怎样",
     "source_doc": "MySQL-进阶",
     "expected_chunk_ids": [
-      "MySQL-进阶:18"
+
     ],
     "expected_files": [
       "MySQL-进阶.md"
@@ -54,7 +44,7 @@
     "category": "Database",
     "difficulty": "single_chunk",
     "relevance": {
-      "MySQL-进阶:18": 3
+
     },
     "reference_facts": "最左前缀法则规定：联合索引只有从最左侧列开始匹配时索引才生效。如果跳过最左列直接查询后续列，索引会失效走全表扫描。例如联合索引(a,b,c)，查询条件只有b和c时索引不生效。",
     "query_id": "Q0003"
@@ -63,8 +53,6 @@
     "query": "InnoDB的行锁、间隙锁和临键锁之间是什么关系",
     "source_doc": "MySQL-进阶",
     "expected_chunk_ids": [
-      "MySQL-进阶:72",
-      "MySQL-进阶:73"
     ],
     "expected_files": [
       "MySQL-进阶.md"
@@ -73,8 +61,7 @@
     "category": "Database",
     "difficulty": "multi_chunk",
     "relevance": {
-      "MySQL-进阶:72": 2,
-      "MySQL-进阶:73": 3
+
     },
     "reference_facts": "行锁（Record Lock）锁定单个索引记录；间隙锁（Gap Lock）锁定索引记录之间的间隙，防止插入；临键锁（Next-Key Lock）是行锁+间隙锁的组合，锁定一个索引记录及其前面的间隙。InnoDB在REPEATABLE READ下默认使用临键锁来防止幻读。",
     "query_id": "Q0004"
@@ -83,9 +70,7 @@
     "query": "MVCC如何利用ReadView、undo log和隐藏列实现非阻塞读",
     "source_doc": "MySQL-进阶",
     "expected_chunk_ids": [
-      "MySQL-进阶:88",
-      "MySQL-进阶:89",
-      "MySQL-进阶:90"
+
     ],
     "expected_files": [
       "MySQL-进阶.md"
@@ -94,9 +79,7 @@
     "category": "Database",
     "difficulty": "cross_section",
     "relevance": {
-      "MySQL-进阶:88": 1,
-      "MySQL-进阶:89": 3,
-      "MySQL-进阶:90": 2
+
     },
     "reference_facts": "MVCC通过三个机制协作：隐藏列（DB_TRX_ID、DB_ROLL_PTR、DB_ROW_ID）记录行版本信息；undo log保存修改前的旧版本形成版本链；ReadView记录当前活跃事务列表。读取时通过比较事务ID与ReadView中的阈值，沿版本链找到可见版本，实现不加锁的读。",
     "query_id": "Q0005"
@@ -105,9 +88,7 @@
     "query": "PostgreSQL的Database与Schema层级设计与MySQL有何不同，为什么适合多租户",
     "source_doc": "PostgreSQL",
     "expected_chunk_ids": [
-      "PostgreSQL:1",
-      "PostgreSQL:2",
-      "PostgreSQL:3"
+
     ],
     "expected_files": [
       "PostgreSQL.md"
@@ -116,9 +97,7 @@
     "category": "Database",
     "difficulty": "multi_chunk",
     "relevance": {
-      "PostgreSQL:1": 2,
-      "PostgreSQL:2": 2,
-      "PostgreSQL:3": 3
+
     },
     "reference_facts": "PostgreSQL的结构是Instance→Database→Schema→Table，一个Database下可以有多个Schema；MySQL中Database和Schema是等价的。PostgreSQL的Schema天然提供命名空间隔离，多租户可以在同一Database下为每个租户分配独立Schema，共享连接但数据隔离。",
     "query_id": "Q0006"
@@ -127,7 +106,7 @@
     "query": "PostgreSQL中查询JSONB时，->和->>运算符有什么区别",
     "source_doc": "PostgreSQL",
     "expected_chunk_ids": [
-      "PostgreSQL:18"
+
     ],
     "expected_files": [
       "PostgreSQL.md"
@@ -136,7 +115,7 @@
     "category": "Database",
     "difficulty": "single_chunk",
     "relevance": {
-      "PostgreSQL:18": 3
+
     },
     "reference_facts": "->运算符返回JSONB对象（保留JSON类型），可用于链式路径导航；->>运算符返回TEXT字符串。例如data->'info'->>'name'，先用->进入嵌套对象，最后用->>提取为文本。",
     "query_id": "Q0007"
@@ -145,7 +124,7 @@
     "query": "PostgreSQL的局部索引是什么，什么场景下最适用",
     "source_doc": "PostgreSQL",
     "expected_chunk_ids": [
-      "PostgreSQL:31"
+
     ],
     "expected_files": [
       "PostgreSQL.md"
@@ -154,7 +133,7 @@
     "category": "Database",
     "difficulty": "single_chunk",
     "relevance": {
-      "PostgreSQL:31": 3
+
     },
     "reference_facts": "局部索引（Partial Index）只对表中满足WHERE条件的行建索引，而非全表所有行。最适用于：大部分查询只关心表中特定子集（如未删除记录WHERE deleted=false）、日志表只查近期数据、状态字段过滤特定值。相比全表索引，体积更小、写入开销更低。",
     "query_id": "Q0008"
@@ -163,8 +142,7 @@
     "query": "Elasticsearch的倒排索引是什么，与MySQL的正排索引有何区别",
     "source_doc": "ElasticSearch",
     "expected_chunk_ids": [
-      "ElasticSearch:1",
-      "ElasticSearch:2"
+
     ],
     "expected_files": [
       "ElasticSearch.md"
@@ -173,8 +151,7 @@
     "category": "Database",
     "difficulty": "multi_chunk",
     "relevance": {
-      "ElasticSearch:1": 2,
-      "ElasticSearch:2": 3
+
     },
     "reference_facts": "倒排索引（Inverted Index）以词条为key，value是该词条出现在哪些文档中，适合关键词全文搜索。MySQL的正排索引（如B+Tree）以行记录为key，通过索引列值定位行，适合精确匹配和范围查询。倒排索引面向搜索场景，正排索引面向OLTP场景。",
     "query_id": "Q0009"
@@ -183,7 +160,7 @@
     "query": "ELK技术栈由哪些组件组成，各自承担什么角色",
     "source_doc": "ElasticSearch",
     "expected_chunk_ids": [
-      "ElasticSearch:0"
+
     ],
     "expected_files": [
       "ElasticSearch.md"
@@ -192,7 +169,7 @@
     "category": "Database",
     "difficulty": "single_chunk",
     "relevance": {
-      "ElasticSearch:0": 3
+
     },
     "reference_facts": "ELK由四个组件组成：Elasticsearch负责分布式存储和全文检索；Logstash负责数据采集、解析和转换后输出到ES；Kibana提供可视化图表和仪表盘；Beats是轻量级数据采集器部署在各节点上，替代Logstash承担采集端角色。",
     "query_id": "Q0010"
@@ -201,8 +178,7 @@
     "query": "RocketMQ中PushConsumer和SimpleConsumer有什么区别，各自适合什么场景",
     "source_doc": "RocketMQ",
     "expected_chunk_ids": [
-      "RocketMQ:2",
-      "RocketMQ:3"
+
     ],
     "expected_files": [
       "RocketMQ.md"
@@ -211,8 +187,7 @@
     "category": "Middleware",
     "difficulty": "multi_chunk",
     "relevance": {
-      "RocketMQ:2": 1,
-      "RocketMQ:3": 1
+
     },
     "reference_facts": "PushConsumer封装了复杂的消费逻辑，服务端主动推送消息到客户端，简化代码但灵活性受限，适合标准消费场景。SimpleConsumer由用户自行控制拉取和提交，需要手动管理offset和负载均衡，更加灵活，适合对消费流程有定制需求的场景。",
     "query_id": "Q0011"
@@ -221,8 +196,7 @@
     "query": "RocketMQ的事务消息中，半消息是什么，TransactionChecker的作用是什么",
     "source_doc": "RocketMQ",
     "expected_chunk_ids": [
-      "RocketMQ:49",
-      "RocketMQ:50"
+
     ],
     "expected_files": [
       "RocketMQ.md"
@@ -231,8 +205,7 @@
     "category": "Middleware",
     "difficulty": "multi_chunk",
     "relevance": {
-      "RocketMQ:49": 2,
-      "RocketMQ:50": 2
+
     },
     "reference_facts": "半消息（Half Message）是发送方先发送到Broker但此时对消费者不可见的消息。TransactionChecker是一个回调接口，Broker在未收到发送方的事务状态确认时，会定期回调TransactionChecker查询本地事务执行状态，据此决定消息是提交（对消费者可见）还是回滚（删除）。",
     "query_id": "Q0012"
@@ -241,9 +214,7 @@
     "query": "RocketMQ中消息粒度和队列粒度的负载均衡有什么区别",
     "source_doc": "RocketMQ",
     "expected_chunk_ids": [
-      "RocketMQ:41",
-      "RocketMQ:42",
-      "RocketMQ:43"
+
     ],
     "expected_files": [
       "RocketMQ.md"
@@ -252,9 +223,7 @@
     "category": "Middleware",
     "difficulty": "multi_chunk",
     "relevance": {
-      "RocketMQ:41": 2,
-      "RocketMQ:42": 3,
-      "RocketMQ:43": 2
+
     },
     "reference_facts": "消息粒度负载均衡（Message-level）以消息为单位分配，每个消费者拉取不同消息，负载均衡更精细但消费者可能频繁竞争。队列粒度负载均衡（Queue-level）以队列为单位分配，一个队列只被一个消费者持有，顺序消费更可靠。两者在消费者数量变化时的rebalance行为不同。",
     "query_id": "Q0013"
@@ -263,8 +232,7 @@
     "query": "REST的六条核心架构约束分别是什么",
     "source_doc": "RPC范式与REST架构约束",
     "expected_chunk_ids": [
-      "RPC范式与REST架构约束:1",
-      "RPC范式与REST架构约束:2"
+
     ],
     "expected_files": [
       "RPC范式与REST架构约束.md"
@@ -273,8 +241,7 @@
     "category": "Distributed",
     "difficulty": "multi_chunk",
     "relevance": {
-      "RPC范式与REST架构约束:1": 2,
-      "RPC范式与REST架构约束:2": 2
+
     },
     "reference_facts": "REST的六条架构约束是：客户端-服务器（Client-Server）分离关注点；无状态（Stateless）每次请求包含全部信息；缓存（Cache）标记响应可缓存性；统一接口（Uniform Interface）标准化资源标识和操作；分层系统（Layered System）组件只能看到直接交互层；按需代码（Code-On-Demand）可选的客户端脚本下载。",
     "query_id": "Q0014"
@@ -283,8 +250,7 @@
     "query": "RPC中的Stub是什么，客户端和服务端的Stub各自扮演什么角色",
     "source_doc": "RPC范式与REST架构约束",
     "expected_chunk_ids": [
-      "RPC范式与REST架构约束:0",
-      "RPC范式与REST架构约束:1"
+
     ],
     "expected_files": [
       "RPC范式与REST架构约束.md"
@@ -293,8 +259,7 @@
     "category": "Distributed",
     "difficulty": "multi_chunk",
     "relevance": {
-      "RPC范式与REST架构约束:0": 2,
-      "RPC范式与REST架构约束:1": 2
+
     },
     "reference_facts": "Stub（桩）是RPC框架自动生成的代理层。客户端Stub负责将本地方法调用封装为网络请求进行序列化；服务端Stub负责将网络请求反序列化并分发给对应的本地方法。Stub使得远程调用对开发者看起来像本地调用一样。",
     "query_id": "Q0015"
@@ -303,8 +268,7 @@
     "query": "面向对象编程的四个基本特征是什么，各自解决什么问题",
     "source_doc": "三大编程范式",
     "expected_chunk_ids": [
-      "三大编程范式:4",
-      "三大编程范式:5"
+
     ],
     "expected_files": [
       "三大编程范式.md"
@@ -313,8 +277,7 @@
     "category": "Programming",
     "difficulty": "multi_chunk",
     "relevance": {
-      "三大编程范式:4": 2,
-      "三大编程范式:5": 1
+
     },
     "reference_facts": "封装将数据和操作封装为对象，隐藏内部实现暴露对外接口，管理复杂度。继承允许子类复用父类的属性和方法，实现代码重用。多态允许同一接口调用不同的实现，处理变化的业务需求。抽象提取共同特征忽略无关细节，隔离变化。这四个特征共同构成OOP的基础。",
     "query_id": "Q0016"
@@ -323,8 +286,7 @@
     "query": "函数式编程中闭包是什么，与面向对象中的对象有何类比关系",
     "source_doc": "三大编程范式",
     "expected_chunk_ids": [
-      "三大编程范式:6",
-      "三大编程范式:7"
+
     ],
     "expected_files": [
       "三大编程范式.md"
@@ -333,8 +295,7 @@
     "category": "Programming",
     "difficulty": "multi_chunk",
     "relevance": {
-      "三大编程范式:6": 2,
-      "三大编程范式:7": 3
+
     },
     "reference_facts": "闭包是函数加上它捕获的外部变量绑定，携带了创建时的上下文。闭包可以看作是对面向对象中对象的替代：闭包是带有数据的行为，对象是带有行为的数据。对象的多方法对应函数的多个操作参数，两者在表达能力上等价。",
     "query_id": "Q0017"
@@ -343,7 +304,7 @@
     "query": "HTTP流式响应与非流式响应的本质区别是什么",
     "source_doc": "流式响应",
     "expected_chunk_ids": [
-      "流式响应:0"
+
     ],
     "expected_files": [
       "流式响应.md"
@@ -352,7 +313,7 @@
     "category": "Web",
     "difficulty": "single_chunk",
     "relevance": {
-      "流式响应:0": 3
+
     },
     "reference_facts": "非流式响应（stream=False）一次加载全部响应内容到内存再处理，延迟高但内容完整。流式响应（stream=True）逐块接收响应数据，不等待全部内容到达就开始处理，降低首字节延迟，适合大文件传输、实时数据推送和LLM token-by-token输出场景。",
     "query_id": "Q0018"
@@ -361,8 +322,7 @@
     "query": "SpringBoot的两大核心机制是什么，分别解决了什么问题",
     "source_doc": "Java/SpringBoot",
     "expected_chunk_ids": [
-      "Java/SpringBoot:0",
-      "Java/SpringBoot:1"
+
     ],
     "expected_files": [
       "SpringBoot.md"
@@ -371,8 +331,7 @@
     "category": "Java",
     "difficulty": "multi_chunk",
     "relevance": {
-      "Java/SpringBoot:0": 2,
-      "Java/SpringBoot:1": 2
+
     },
     "reference_facts": "SpringBoot两大核心机制：自动配置（Auto-Configuration）根据classpath中的jar包自动配置Spring组件，减少手动编写XML和Java配置；起步依赖（Starter）将一组常用依赖打包为单个依赖坐标，简化版本管理和依赖声明。两者共同实现了开箱即用。",
     "query_id": "Q0019"
@@ -381,8 +340,7 @@
     "query": "SpringBoot中@ConfigurationProperties与@Configuration配置类之间是什么关系",
     "source_doc": "Java/SpringBoot",
     "expected_chunk_ids": [
-      "Java/SpringBoot:49",
-      "Java/SpringBoot:50"
+
     ],
     "expected_files": [
       "SpringBoot.md"
@@ -391,8 +349,7 @@
     "category": "Java",
     "difficulty": "multi_chunk",
     "relevance": {
-      "Java/SpringBoot:49": 3,
-      "Java/SpringBoot:50": 1
+
     },
     "reference_facts": "@ConfigurationProperties负责从配置文件（如application.yml）中读取并绑定配置值到Java对象，是数据绑定层。@Configuration标注的配置类负责创建和装配Spring Bean，是Bean定义层。二者协作时，@EnableConfigurationProperties将配置属性类的绑定结果注入配置类中，再由配置类通过Bean方法提供出去。",
     "query_id": "Q0020"
@@ -401,7 +358,7 @@
     "query": "SpringBoot自动配置的六个步骤是什么",
     "source_doc": "Java/SpringBoot",
     "expected_chunk_ids": [
-      "Java/SpringBoot:46"
+
     ],
     "expected_files": [
       "SpringBoot.md"
@@ -410,7 +367,7 @@
     "category": "Java",
     "difficulty": "single_chunk",
     "relevance": {
-      "Java/SpringBoot:46": 2
+
     },
     "reference_facts": "1.引入Starter依赖；2.AutoConfigurationImportSelector扫描META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports文件；3.加载候选自动配置类的全限定名列表；4.通过Conditional条件注解（如@ConditionalOnClass、@ConditionalOnMissingBean）过滤出实际生效的配置类；5.生效的配置类通过@Bean方法创建并注入默认组件；6.如用户自定义了同名Bean，自动配置的Bean被覆盖。",
     "query_id": "Q0021"
@@ -419,11 +376,7 @@
     "query": "JVM的五大运行时数据区是什么，哪些是线程私有的，哪些是共享的",
     "source_doc": "Java/JVM",
     "expected_chunk_ids": [
-      "Java/JVM:0",
-      "Java/JVM:1",
-      "Java/JVM:2",
-      "Java/JVM:3",
-      "Java/JVM:4"
+
     ],
     "expected_files": [
       "JVM.md"
@@ -432,11 +385,7 @@
     "category": "Java",
     "difficulty": "cross_section",
     "relevance": {
-      "Java/JVM:0": 2,
-      "Java/JVM:1": 1,
-      "Java/JVM:2": 1,
-      "Java/JVM:3": 2,
-      "Java/JVM:4": 3
+
     },
     "reference_facts": "五大数据区：程序计数器（PC Register）、Java虚拟机栈（VM Stack）、本地方法栈（Native Method Stack）是线程私有的。堆（Heap）和方法区（Method Area，JDK8后为Metaspace）是线程共享的。程序计数器记录当前线程执行位置，虚拟机栈存储方法调用的栈帧。",
     "query_id": "Q0022"
@@ -445,10 +394,7 @@
     "query": "Java类加载的双亲委派模型是什么机制，它的三个主要目的是什么",
     "source_doc": "Java/JVM",
     "expected_chunk_ids": [
-      "Java/JVM:46",
-      "Java/JVM:50",
-      "Java/JVM:51",
-      "Java/JVM:52"
+
     ],
     "expected_files": [
       "JVM.md"
@@ -457,10 +403,7 @@
     "category": "Java",
     "difficulty": "cross_section",
     "relevance": {
-      "Java/JVM:46": 2,
-      "Java/JVM:50": 1,
-      "Java/JVM:51": 2,
-      "Java/JVM:52": 2
+
     },
     "reference_facts": "双亲委派模型（Bipartite Delegation）：一个类加载器收到类加载请求时，先委托父加载器加载，父加载器无法找到该类时才自己尝试加载。三个目的：避免类的重复加载、防止核心API（如java.lang.Object）被篡改、保证类的安全性。该模型定义了Bootstrap→Extension/Platform→Application三条类加载器链路。",
     "query_id": "Q0023"
@@ -469,8 +412,7 @@
     "query": "Minor GC、Major GC和Full GC分别在什么范围触发，有什么区别",
     "source_doc": "Java/JVM",
     "expected_chunk_ids": [
-      "Java/JVM:82",
-      "Java/JVM:83"
+
     ],
     "expected_files": [
       "JVM.md"
@@ -479,8 +421,7 @@
     "category": "Java",
     "difficulty": "multi_chunk",
     "relevance": {
-      "Java/JVM:82": 2,
-      "Java/JVM:83": 2
+
     },
     "reference_facts": "Minor GC发生在新生代，当Eden区满时触发，回收Eden和Survivor区中的无用对象，频率高但速度快。Major GC发生在老年代，当老年代空间不足时触发，通常伴随至少一次Minor GC。Full GC清理整个堆和方法区（Metaspace），STW时间长，对应用影响最大，应尽量避免频繁触发。",
     "query_id": "Q0024"
@@ -489,8 +430,7 @@
     "query": "ThreadPoolExecutor中的Worker线程是如何持续从BlockingQueue中取任务的",
     "source_doc": "Java/线程池技术",
     "expected_chunk_ids": [
-      "Java/线程池技术:0",
-      "Java/线程池技术:1"
+
     ],
     "expected_files": [
       "线程池技术.md"
@@ -499,8 +439,7 @@
     "category": "Java",
     "difficulty": "multi_chunk",
     "relevance": {
-      "Java/线程池技术:0": 1,
-      "Java/线程池技术:1": 3
+
     },
     "reference_facts": "Worker类实现了Runnable接口，内部维护一个Thread引用。Worker启动后进入runWorker()方法，在一个while循环中反复调用getTask()从BlockingQueue中拉取任务。没有任务时BlockingQueue的poll()或take()让Worker阻塞等待，有任务时立即或超时后取出执行。取出null时Worker退出循环。",
     "query_id": "Q0025"
@@ -509,8 +448,7 @@
     "query": "线程池中的线程是饿汉式创建还是懒汉式创建",
     "source_doc": "Java/线程池技术",
     "expected_chunk_ids": [
-      "Java/线程池技术:0",
-      "Java/线程池技术:1"
+
     ],
     "expected_files": [
       "线程池技术.md"
@@ -519,8 +457,7 @@
     "category": "Java",
     "difficulty": "multi_chunk",
     "relevance": {
-      "Java/线程池技术:0": 3,
-      "Java/线程池技术:1": 2
+
     },
     "reference_facts": "懒汉式创建。核心线程也并非在创建线程池时就全部创建好，而是在提交任务时才按需创建。当提交任务时如果当前运行线程数小于corePoolSize，则创建新线程来执行。只有调用了prestartAllCoreThreads()方法才会在创建线程池后立即创建所有核心线程。",
     "query_id": "Q0026"
@@ -538,7 +475,7 @@
     "category": "Java",
     "difficulty": "single_chunk",
     "relevance": {
-      "Java/线程池参数设置决策:0": 3
+
     },
     "reference_facts": "CPU密集型：核心线程数 = CPU核心数 + 1，加1是为了利用线程等待IO时的CPU空闲间隙。IO密集型：核心线程数 = CPU核心数 × (1 + IO等待时间/CPU计算时间)，或简化为CPU核心数 × 2。但经验公式只是起点，最终需要压测验证实际最优值。",
     "query_id": "Q0027"
@@ -547,7 +484,7 @@
     "query": "线程数量增加超过最优解后，吞吐量和延迟分别怎样变化",
     "source_doc": "Java/线程池参数设置决策",
     "expected_chunk_ids": [
-      "Java/线程池参数设置决策:0"
+
     ],
     "expected_files": [
       "线程池参数设置决策.md"
@@ -556,7 +493,7 @@
     "category": "Java",
     "difficulty": "single_chunk",
     "relevance": {
-      "Java/线程池参数设置决策:0": 2
+
     },
     "reference_facts": "当线程数超过最优解后，吞吐量不再上升甚至下降，因为过多的线程竞争CPU和锁资源导致上下文切换开销增大。延迟持续上升，因为每个线程分到的时间片更少，任务排队等待时间变长。",
     "query_id": "Q0028"
@@ -565,7 +502,7 @@
     "query": "OpenFeign一次调用从方法调用到实际HTTP请求经历了哪三步链路",
     "source_doc": "Java/OpenFeign",
     "expected_chunk_ids": [
-      "Java/OpenFeign:0"
+
     ],
     "expected_files": [
       "OpenFeign.md"
@@ -574,7 +511,7 @@
     "category": "Java",
     "difficulty": "single_chunk",
     "relevance": {
-      "Java/OpenFeign:0": 3
+
     },
     "reference_facts": "第一步：OpenFeign将接口方法的@FeignClient声明生成为JDK动态代理对象，拦截方法调用。第二步：通过集成的LoadBalancer从Nacos注册中心获取服务实例列表并做负载均衡选择目标地址。第三步：底层HTTP Client（如Apache HttpClient或OkHttp）根据选择的目标地址发送HTTP请求并接收响应。",
     "query_id": "Q0029"
@@ -583,7 +520,7 @@
     "query": "阻塞式编程中并发的上限由什么决定",
     "source_doc": "Java/阻塞式编程",
     "expected_chunk_ids": [
-      "Java/阻塞式编程:0"
+
     ],
     "expected_files": [
       "阻塞式编程.md"
@@ -592,7 +529,7 @@
     "category": "Java",
     "difficulty": "single_chunk",
     "relevance": {
-      "Java/阻塞式编程:0": 3
+
     },
     "reference_facts": "由线程数量决定。每个请求独占一个线程，线程在IO等待时被阻塞，整个线程虽不消耗CPU但占用内存（约1MB栈空间）。线程数有物理上限，所以并发量也受限于线程数。",
     "query_id": "Q0030"
@@ -601,7 +538,7 @@
     "query": "响应式编程为什么没有理论的并发上限",
     "source_doc": "Java/响应式编程",
     "expected_chunk_ids": [
-      "Java/响应式编程:0"
+
     ],
     "expected_files": [
       "响应式编程.md"
@@ -610,7 +547,7 @@
     "category": "Java",
     "difficulty": "single_chunk",
     "relevance": {
-      "Java/响应式编程:0": 2
+
     },
     "reference_facts": "响应式编程不绑定线程与请求（one-thread-per-request），请求在等待IO时线程被释放去处理其他请求。整个系统只需少量线程就支撑海量并发，并发上限由CPU和内存资源决定而非线程池大小。",
     "query_id": "Q0031"
@@ -619,7 +556,7 @@
     "query": "四种导致线程退出CPU执行并触发上下文切换的情况是什么",
     "source_doc": "Java/什么是线程上下文切换",
     "expected_chunk_ids": [
-      "Java/什么是线程上下文切换:0"
+
     ],
     "expected_files": [
       "什么是线程上下文切换.md"
@@ -628,7 +565,7 @@
     "category": "Java",
     "difficulty": "single_chunk",
     "relevance": {
-      "Java/什么是线程上下文切换:0": 3
+
     },
     "reference_facts": "1.时间片耗尽：线程的CPU时间片用完，操作系统强制切换。2.主动阻塞：线程调用sleep()、wait()、join()等方法主动让出CPU。3.IO操作：线程发起IO请求后阻塞等待，让出CPU。4.高优先级抢占：有更高优先级的线程就绪抢占了当前线程的执行权。",
     "query_id": "Q0032"
@@ -637,7 +574,7 @@
     "query": "Sentinel的三种熔断策略分别用什么阈值来判断",
     "source_doc": "Java/熔断降级",
     "expected_chunk_ids": [
-      "Java/熔断降级:0"
+
     ],
     "expected_files": [
       "熔断降级.md"
@@ -646,7 +583,7 @@
     "category": "Java",
     "difficulty": "single_chunk",
     "relevance": {
-      "Java/熔断降级:0": 3
+
     },
     "reference_facts": "慢调用比例（slowRatioThreshold）：当请求中慢调用的比例超过阈值时熔断，默认慢调用定义为响应时间>maxAllowedRt。异常比例（errorRatioThreshold）：当异常请求的比例超过阈值时熔断。异常数（errorCountThreshold）：当一分钟内异常数超过阈值时熔断。三种策略在熔断后都有半开探测恢复机制。",
     "query_id": "Q0033"
@@ -655,8 +592,7 @@
     "query": "Sentinel的三种QPS流控效果分别是什么",
     "source_doc": "Java/流量控制",
     "expected_chunk_ids": [
-      "Java/流量控制:0",
-      "Java/流量控制:1"
+
     ],
     "expected_files": [
       "流量控制.md"
@@ -665,8 +601,7 @@
     "category": "Java",
     "difficulty": "multi_chunk",
     "relevance": {
-      "Java/流量控制:0": 2,
-      "Java/流量控制:1": 2
+
     },
     "reference_facts": "直接拒绝（Default）：当QPS超过阈值直接抛出FlowException拒绝请求。Warm Up（预热）：系统启动时允许的QPS从一个较低值逐渐增加到阈值，防止冷系统被突发流量冲垮。匀速排队（Rate Limiter）：严格限制请求通过间隔，使请求以匀速通过，突发流量排队等待。",
     "query_id": "Q0034"
@@ -675,8 +610,7 @@
     "query": "Sentinel的关联流控是什么场景下使用",
     "source_doc": "Java/流量控制",
     "expected_chunk_ids": [
-      "Java/流量控制:0",
-      "Java/流量控制:1"
+
     ],
     "expected_files": [
       "流量控制.md"
@@ -685,8 +619,7 @@
     "category": "Java",
     "difficulty": "single_chunk",
     "relevance": {
-      "Java/流量控制:0": 2,
-      "Java/流量控制:1": 3
+
     },
     "reference_facts": "关联流控控制的是关联资源。当一个资源的访问量达到阈值时，限制另一个关联资源的访问，而非限制自己。典型场景：数据库的读接口和写接口是关联关系，写操作压力大时自动限制读操作以保护数据库。还有支付下单和查看订单列表的关联场景。",
     "query_id": "Q0035"
@@ -695,7 +628,7 @@
     "query": "Python协程的本质是什么，它与普通函数的核心区别在哪",
     "source_doc": "Python/协程",
     "expected_chunk_ids": [
-      "Python/协程:0"
+
     ],
     "expected_files": [
       "协程.md"
@@ -704,7 +637,7 @@
     "category": "Python",
     "difficulty": "single_chunk",
     "relevance": {
-      "Python/协程:0": 3
+
     },
     "reference_facts": "协程本质上是一个可挂起、可恢复的状态机（suspendable/resumable state machine），而非普通函数的一次性执行。协程通过await主动让出控制权给事件循环而非被操作系统抢占，挂起时保存当前执行状态，恢复时从挂起点继续执行。这是协作式多任务而非抢占式。",
     "query_id": "Q0036"
@@ -713,7 +646,7 @@
     "query": "为什么两个连续的await语句之间是天然原子的，不会有竞态条件",
     "source_doc": "Python/协程",
     "expected_chunk_ids": [
-      "Python/协程:0"
+
     ],
     "expected_files": [
       "协程.md"
@@ -722,7 +655,7 @@
     "category": "Python",
     "difficulty": "single_chunk",
     "relevance": {
-      "Python/协程:0": 3
+
     },
     "reference_facts": "协程只在await点主动让出控制权，在两个await之间没有await时协程不会意外中断，因此这段时间内的操作是不可分割的原子操作。但注意这仅适用于单线程事件循环下的协程，如果有多个线程各自运行事件循环则不成立。",
     "query_id": "Q0037"
@@ -731,7 +664,7 @@
     "query": "Python中@语法糖在函数定义上方实际翻译成什么代码",
     "source_doc": "Python/装饰器",
     "expected_chunk_ids": [
-      "Python/装饰器:0"
+
     ],
     "expected_files": [
       "装饰器.md"
@@ -740,7 +673,7 @@
     "category": "Python",
     "difficulty": "single_chunk",
     "relevance": {
-      "Python/装饰器:0": 3
+
     },
     "reference_facts": "@decorator在函数定义上方等价于：func = decorator(func)。装饰器是一个接受函数对象并返回新函数对象的可调用对象。@decorator(args)等价于func = decorator(args)(func)，即decorator(args)先返回装饰器函数，再用这个装饰器包装原函数。",
     "query_id": "Q0038"
@@ -749,8 +682,7 @@
     "query": "自定义装饰器时functools.wraps装饰器的作用是什么",
     "source_doc": "Python/装饰器",
     "expected_chunk_ids": [
-      "Python/装饰器:0",
-      "Python/装饰器:1"
+
     ],
     "expected_files": [
       "装饰器.md"
@@ -759,8 +691,7 @@
     "category": "Python",
     "difficulty": "multi_chunk",
     "relevance": {
-      "Python/装饰器:0": 2,
-      "Python/装饰器:1": 3
+
     },
     "reference_facts": "wraps将原函数的元信息（__name__、__doc__、__module__等）复制到装饰后的wrapper函数上。不加wraps时，被装饰后的函数名会变为wrapper，导致函数签名丢失和文档混乱；加了之后函数名和文档保持为原函数的信息。",
     "query_id": "Q0039"
@@ -769,7 +700,7 @@
     "query": "Python闭包形成的三个条件是什么",
     "source_doc": "Python/闭包",
     "expected_chunk_ids": [
-      "Python/闭包:0"
+
     ],
     "expected_files": [
       "闭包.md"
@@ -778,7 +709,7 @@
     "category": "Python",
     "difficulty": "single_chunk",
     "relevance": {
-      "Python/闭包:0": 3
+
     },
     "reference_facts": "1.存在嵌套函数（内部函数定义在外部函数之内）；2.内部函数引用了外部函数的变量（非全局变量）；3.外部函数返回了内部函数（将这个嵌套函数作为返回值传递出去）。三个条件缺一不可。",
     "query_id": "Q0040"
@@ -787,7 +718,7 @@
     "query": "在实现层面，Python如何在外层函数返回后仍然保留被捕获的外部变量",
     "source_doc": "Python/闭包",
     "expected_chunk_ids": [
-      "Python/闭包:1"
+
     ],
     "expected_files": [
       "闭包.md"
@@ -796,7 +727,7 @@
     "category": "Python",
     "difficulty": "single_chunk",
     "relevance": {
-      "Python/闭包:1": 2
+
     },
     "reference_facts": "Python在每个函数对象上维护__closure__属性，这是一个元组，包含一组cell对象。每个cell对象存储一个被捕获的外部变量的当前值。当外层函数返回内层函数时，内层函数的__closure__仍持有这些cell的引用，只要闭包对象存在，cell中的值就不会被GC回收。",
     "query_id": "Q0041"
@@ -805,7 +736,7 @@
     "query": "Python类型注解与Pydantic BaseModel在验证时机上有何本质区别",
     "source_doc": "Python/类型注解与BaseModel",
     "expected_chunk_ids": [
-      "Python/类型注解与BaseModel:0"
+
     ],
     "expected_files": [
       "类型注解与BaseModel.md"
@@ -814,7 +745,7 @@
     "category": "Python",
     "difficulty": "single_chunk",
     "relevance": {
-      "Python/类型注解与BaseModel:0": 3
+
     },
     "reference_facts": "Python类型注解（PEP 484）是静态的、给IDE和类型检查工具（mypy）看的提示，运行时不做任何验证。Pydantic BaseModel在对象创建时进行运行时验证和自动类型强制转换，验证失败会直接抛ValidationError。类型注解不改变程序行为，BaseModel改变。",
     "query_id": "Q0042"
@@ -823,7 +754,7 @@
     "query": "在网关或代理层面，透传是什么意思",
     "source_doc": "Python/透传",
     "expected_chunk_ids": [
-      "Python/透传:0"
+
     ],
     "expected_files": [
       "透传.md"
@@ -832,7 +763,7 @@
     "category": "Middleware",
     "difficulty": "single_chunk",
     "relevance": {
-      "Python/透传:0": 3
+
     },
     "reference_facts": "透传（Transparent Forwarding / Passthrough）指中间节点不解析、不修改数据内容，原样转发给下游。对发送方和接收方来说中间节点是透明的。在代码层面，*args和**kwargs收集所有参数后原样传递给内部函数，实现了调用层面的透明转发。",
     "query_id": "Q0043"
@@ -841,7 +772,7 @@
     "query": "Python推导式有哪些类型，各自的符号定界是什么",
     "source_doc": "Python/推导式",
     "expected_chunk_ids": [
-      "Python/推导式:0"
+
     ],
     "expected_files": [
       "推导式.md"
@@ -850,7 +781,7 @@
     "category": "Python",
     "difficulty": "single_chunk",
     "relevance": {
-      "Python/推导式:0": 3
+
     },
     "reference_facts": "列表推导式用方括号[]定界，返回list；集合推导式用花括号{}定界，返回set且自动去重；字典推导式用花括号{}和冒号:定界，key:value格式返回dict；生成器表达式用圆括号()定界，返回generator对象惰性求值。",
     "query_id": "Q0044"
@@ -859,8 +790,7 @@
     "query": "Advanced RAG的三个优化阶段分别是什么，各自用到什么技术",
     "source_doc": "Agent/RAG前沿架构与高级模式",
     "expected_chunk_ids": [
-      "Agent/RAG前沿架构与高级模式:0",
-      "Agent/RAG前沿架构与高级模式:1"
+
     ],
     "expected_files": [
       "RAG前沿架构与高级模式.md"
@@ -869,8 +799,7 @@
     "category": "Agent",
     "difficulty": "multi_chunk",
     "relevance": {
-      "Agent/RAG前沿架构与高级模式:0": 2,
-      "Agent/RAG前沿架构与高级模式:1": 3
+      
     },
     "reference_facts": "Pre-Retrieval（检索前优化）：查询改写、查询扩展、意图识别，将模糊的query转为更精确的检索输入。Retrieval（检索阶段优化）：混合检索（稠密+稀疏）、多路召回、自适应检索。Post-Retrieval（检索后优化）：Reranker重排序、上下文压缩、信息过滤去噪。三个阶段串行构成完整优化链路。",
     "query_id": "Q0045"
