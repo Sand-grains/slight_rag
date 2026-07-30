@@ -30,6 +30,15 @@ cpu = ["torch", "torchvision"]
 [tool.setuptools.packages.find]
 include = ["indexing*", "retrieval*", "agent*"]
 
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
