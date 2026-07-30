@@ -46,6 +46,7 @@ print(f"向量化完成，维度: {len(vectors[0])}")
 
 store = IndexStore()
 store.batch_add(chunks, vectors)
+store.vector_persistence()
 print("向量入库完成")
 
 # ==================== Agent 层 ====================
