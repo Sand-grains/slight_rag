@@ -1,17 +1,15 @@
-"""Benchmark 标注辅助脚本：按 source_doc 分组，逐条交互式标注。
+"""Benchmark 标注辅助脚本：逐条逐块标注 expected_chunk_ids + relevance + difficulty。
 
-核心特性：
-    - 按 chunk_index（非 enumerate 顺序号）定位 chunk——输入 "20" 即指 chunk_id 为 "...:20" 的那块
-    - 逐块标注 relevance、category、difficulty，每步可 e 退出
-    - 断点续标：is_annotated() 跳过已完成条目
-    - 同一文档的 chunk 列表只打印一次，多个 question 共享显示
+流程（以 query_id 为单元，从 Q0001 开始）：
+  1. 检测该条目是否已有 expected_chunk_ids，若有则询问是否覆盖
+  2. 逐块打印 source_doc 的全部 chunk 全文（Enter 下一块，e 跳过）
+  3. 打印 query 和 reference_facts
+  4. 输入数字索引（自动拼接完整 chunk_id）+ 立即打 relevance（1/2/3）
+     u 撤销上一组，d 完成
+  5. 询问 difficulty
+  6. 保存，进入下一条
 
-用法示例::
-
-    uv run python annotate_helper.py
-
-公共接口（可直接 import 使用）：
-    无（独立脚本，不可作为模块导入）
+用法:  uv run python annotate_helper.py
 """
 
 import json
@@ -22,16 +20,20 @@ from collections import defaultdict
 from retrieval.store import IndexStore
 from config import VECTOR_CACHE_DIR
 
-
 EXIT_KEY = "e"
 
+VALID_DIFFICULTIES = ["single_chunk", "multi_chunk"]
+
+_PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+_BENCHMARK_PATH = os.path.join(_PROJECT_DIR, "benchmark_private.json")
+_RELIABILITY_PATH = os.path.join(_PROJECT_DIR, "auto_reliability.md")
+
+
+# ---------------------------------------------------------------------------
+# 加载 / 保存
+# ---------------------------------------------------------------------------
 
 def load_benchmark(path: str) -> list[dict]:
-    """加载原始 benchmark JSON，返回 list[dict]。
-
-    注意：与 eval/core/benchmark.py 的 load_benchmark() 不同——
-    后者返回经过校验和默认值填充的 BenchmarkLoadResult，此函数仅做 JSON 反序列化。
-    """
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -42,133 +44,232 @@ def save_benchmark(items: list[dict], path: str):
     print(f"  [已保存] {path}\n")
 
 
-def build_doc_index(store: IndexStore) -> dict[str, dict]:
-    """构建 doc_id → {chunk_index: Chunk} 的映射。"""
+# ---------------------------------------------------------------------------
+# chunk 索引
+# ---------------------------------------------------------------------------
+
+def build_doc_index(store: IndexStore) -> dict[str, dict[int, object]]:
+    """doc_id → {chunk_index: Chunk}"""
     index: dict[str, dict[int, object]] = defaultdict(dict)
     for c in store.chunks:
         index[c.doc_id][c.origin_metadata.chunk_index] = c
     return index
 
 
-def is_annotated(item: dict) -> bool:
-    """判断一条 benchmark 条目是否已完成标注。"""
-    return bool(
-        item.get("query_id")
-        and item.get("category") and item.get("category") != "unknown"
-        and item.get("difficulty") and item.get("difficulty") != "unknown"
-        and item.get("relevance")
-    )
+# ---------------------------------------------------------------------------
+# 逐块打印全文
+# ---------------------------------------------------------------------------
 
+def print_chunks(chunk_by_index: dict[int, object], query: str, reference_facts: str, source_doc: str) -> list[dict]:
+    """逐块打印全文，每块顶部显示 query + reference_facts 供对照。
 
-VALID_CATEGORIES = ["Database", "Java", "Python", "Agent", "Middleware", "Distributed", "OS", "Programming", "Web"]
-VALID_DIFFICULTIES = ["single_chunk", "multi_chunk", "cross_section"]
+    Enter → 立即标注当前 chunk（输入 relevance 1/2/3），然后下一块
+    e → 跳过当前块，下一块
+    返回 list[dict]：已标注的 {chunk_id, relevance}。
+    """
+    sorted_indices = sorted(chunk_by_index.keys())
+    annotations: list[dict] = []
 
-
-def prompt_field(prompt: str, current: str, valid_values: list[str] | None = None) -> str | None:
-    """带当前值提示的单行输入。空输入 = 保留当前值。输入 e = 退出返回 None。"""
-    hint = f"  (当前: {current})" if current else ""
-    if valid_values:
-        hint += f"  有效值: {valid_values}"
-    raw = input(f"  {prompt}{hint}\n  > ").strip()
-    if raw.lower() == EXIT_KEY:
-        return None
-    return raw if raw else current
-
-
-def annotate_item(idx: int, item: dict, chunk_by_index: dict[int, object], source_doc: str):
-    """标注单条 benchmark 条目。任意 prompt 输入 e 跳过当前条。"""
-    print(f"\n  --- [{idx}] {item.get('query_id', '?')} ---")
-    print(f"  Q: {item['question']}")
-
-    ref = item.get("reference_facts") or item.get("ground_truth", "")
-    if ref:
-        print(f"  reference_facts: {ref}")
-
-    # category
-    val = prompt_field("Category?", item.get("category", ""), VALID_CATEGORIES)
-    if val is None:
-        print("  [跳过本条]\n")
-        return
-    item["category"] = val
-
-    # difficulty
-    val = prompt_field("Difficulty?", item.get("difficulty", ""), VALID_DIFFICULTIES)
-    if val is None:
-        print("  [跳过本条]\n")
-        return
-    item["difficulty"] = val
-
-    # relevance（逐块标注：选 chunk → 看原文 → 打分 → 继续？y/n）
-    new_relevance: dict[str, int] = dict(item.get("relevance", {}))
-    while True:
-        raw = input(
-            "  选 chunk_index? (空=保留旧值并结束, e=跳过本条)\n"
-            "  > "
-        ).strip()
-
-        if raw.lower() == EXIT_KEY:
-            print("  [跳过本条]\n")
-            return
-
-        if not raw:
-            break
-
-        try:
-            ci = int(raw)
-        except ValueError:
-            print(f"  ⚠ 无法解析: '{raw}'，请重试。\n")
-            continue
-
-        if ci not in chunk_by_index:
-            print(f"  ⚠ chunk_index {ci} 不存在，请重试。\n")
-            continue
-
-        # 打印该 chunk 原文
+    i = 0
+    while i < len(sorted_indices):
+        ci = sorted_indices[i]
         c = chunk_by_index[ci]
-        print(f"\n  {'─'*60}")
-        print(f"  [{ci}] {c.chunk_id}")
-        print(f"  {'─'*60}")
+
+        # 清屏
+        os.system("cls" if os.name == "nt" else "clear")
+
+        print(f"Q: {query}")
+        if reference_facts:
+            print(f"reference_facts: {reference_facts}")
+        print()
+
+        print(f"[chunk {ci}/{len(sorted_indices) - 1}]  {c.chunk_id}")
+        print("─" * 70)
         print(c.content)
-        print(f"  {'─'*60}\n")
+        print("─" * 70)
 
-        # 打分
-        rel_raw = input(
-            f"  给 [{ci}] 打 relevance? (1/2/3, e=跳过本条)\n"
-            "  > "
-        ).strip()
+        if annotations:
+            labeled = [f"[{a['chunk_id'].split(':')[-1]}]={a['relevance']}" for a in annotations]
+            print(f"  已标注: {', '.join(labeled)}")
 
-        if rel_raw.lower() == EXIT_KEY:
-            print("  [跳过本条]\n")
-            return
+        raw = input("  Enter=标注  e=跳过  > ").strip().lower()
+        if raw == EXIT_KEY:
+            i += 1
+            continue
 
-        try:
-            rel = int(rel_raw)
-            if rel not in (1, 2, 3):
-                print(f"  ⚠ relevance 应为 1/2/3，收到 {rel}，本次不计入。\n")
-            else:
-                new_relevance[chunk_by_index[ci].chunk_id] = rel
-                print(f"  ✓ [{ci}] → relevance={rel}\n")
-        except ValueError:
-            print(f"  ⚠ 无法解析: '{rel_raw}'，本次不计入。\n")
+        # Enter / 其他 → 标注
+        rel_raw = input(f"  [{ci}] relevance? (1/2/3, 空=跳过)\n  > ").strip()
+        if rel_raw:
+            try:
+                rel = int(rel_raw)
+                if rel in (1, 2, 3):
+                    full_id = f"{source_doc}:{ci}"
+                    annotations.append({"chunk_id": full_id, "relevance": rel})
+                    print(f"  ✓ [{ci}] {full_id}  relevance={rel}")
+                else:
+                    print(f"  ⚠ relevance 应为 1/2/3，本次跳过")
+            except ValueError:
+                print(f"  ⚠ 无法解析: '{rel_raw}'，本次跳过")
+        i += 1
 
-        # 继续？
-        cont = input("  继续选下一个 chunk? (y=继续 / n=确认结束, 写入)\n  > ").strip().lower()
-        if cont == "n":
+    # 最后清屏
+    os.system("cls" if os.name == "nt" else "clear")
+    return annotations
+
+
+# ---------------------------------------------------------------------------
+# 单条标注
+# ---------------------------------------------------------------------------
+
+def annotate_entry(
+    entry: dict,
+    chunk_by_index: dict[int, object],
+    source_doc: str,
+) -> bool:
+    """标注单条 entry。返回 False 表示退出程序。"""
+    qid = entry.get("query_id", "?")
+    existing_ids = entry.get("expected_chunk_ids", [])
+    ref = entry.get("reference_facts") or entry.get("ground_truth", "")
+
+    # 捕获 AI 标注：relevance 为空说明 AI 未标注，本条的 expected_chunk_ids 即 AI 预测结果
+    is_ai_entry = not entry.get("relevance")
+    ai_chunks = list(existing_ids) if is_ai_entry else None
+
+    # ---- 步骤 1: 已有标注时询问是否重新输入 ----
+    if existing_ids:
+        print(f"\n{'=' * 60}")
+        print(f"[{qid}]  source_doc: {source_doc}")
+        print(f"已有 expected_chunk_ids: {existing_ids}")
+        print(f"已有 relevance: {entry.get('relevance', {})}")
+        print(f"{'=' * 60}")
+        raw = input("  是否重新输入? (y=覆盖 / n=跳过 / q=退出)\n  > ").strip().lower()
+        if raw == "q":
+            return False
+        if raw == "n":
+            return True
+
+    # ---- 步骤 2: 逐块打印 + 边看边标 ----
+    print(f"\n{'─' * 70}")
+    print(f"[{qid}]  逐块打印 {source_doc} 全文")
+    print(f"  Enter=标注当前块   e=跳过")
+    input("  按 Enter 开始...")
+
+    annotations = print_chunks(chunk_by_index, entry["query"], ref, source_doc)
+
+    # ---- 步骤 3: 汇总 ----
+    print("=" * 60)
+    print(f"[{qid}]  source_doc: {source_doc}")
+    print(f"Q: {entry['query']}")
+    if ref:
+        print(f"reference_facts: {ref}")
+    print("=" * 60)
+
+    new_relevance: dict[str, int] = {}
+    new_chunk_ids: list[str] = []
+    for a in annotations:
+        new_chunk_ids.append(a["chunk_id"])
+        new_relevance[a["chunk_id"]] = a["relevance"]
+
+    if new_chunk_ids:
+        print(f"\n  本次标注 ({len(new_chunk_ids)} 个):")
+        for cid in new_chunk_ids:
+            idx_part = cid.split(":")[-1] if ":" in cid else cid
+            print(f"    [{idx_part}] {cid}  relevance={new_relevance[cid]}")
+    else:
+        print(f"\n  本次标注: 0 个 chunk")
+
+    # ---- 步骤 4: 询问 difficulty ----
+    current_diff = entry.get("difficulty", "single_chunk")
+    if current_diff not in VALID_DIFFICULTIES:
+        current_diff = "single_chunk"
+    raw = input(f"\n  Difficulty? ({'/'.join(VALID_DIFFICULTIES)}, 空=保留 '{current_diff}')\n  > ").strip()
+    if raw and raw in VALID_DIFFICULTIES:
+        current_diff = raw
+    elif raw and raw not in VALID_DIFFICULTIES:
+        print(f"  ⚠ 无效值: '{raw}'，保留 '{current_diff}'")
+
+    # ---- 写入 ----
+    entry["expected_chunk_ids"] = new_chunk_ids
+    entry["relevance"] = new_relevance
+    entry["difficulty"] = current_diff
+    if "query_id" not in entry:
+        entry["query_id"] = "Q0000"
+
+    # 计算 AI 标注可信度
+    if ai_chunks is not None:
+        jac = compute_jaccard(ai_chunks, new_chunk_ids)
+        save_reliability(qid, jac)
+        print(f"  AI 可信度 (Jaccard): {jac:.3f}")
+
+    print(f"\n  ✓ [{qid}] 标注完成: {len(new_chunk_ids)} chunks, difficulty={current_diff}\n")
+    return True
+
+
+# ---------------------------------------------------------------------------
+# AI 标注可信度
+# ---------------------------------------------------------------------------
+
+def compute_jaccard(ai_chunks: list[str], human_chunks: list[str]) -> float:
+    """两个 chunk_id 集合的 Jaccard 相似度。两者均为空 → 1.0；一者为空 → 0.0。"""
+    ai_set = set(ai_chunks)
+    human_set = set(human_chunks)
+    union = ai_set | human_set
+    if not union:
+        return 1.0
+    return len(ai_set & human_set) / len(union)
+
+
+def load_reliability() -> list[dict]:
+    """从 auto_reliability.md 读取已有记录。"""
+    records = []
+    if os.path.exists(_RELIABILITY_PATH):
+        with open(_RELIABILITY_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or line.startswith("---"):
+                    continue
+                parts = line.split()
+                if len(parts) >= 3:
+                    try:
+                        records.append({
+                            "query_id": parts[0],
+                            "jaccard": float(parts[1]),
+                            "time": " ".join(parts[2:]),
+                        })
+                    except ValueError:
+                        pass
+    return records
+
+
+def save_reliability(query_id: str, jaccard: float):
+    """追加/更新单条可信度记录，重写 auto_reliability.md。"""
+    from datetime import datetime
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    records = load_reliability()
+    updated = False
+    for r in records:
+        if r["query_id"] == query_id:
+            r["jaccard"] = jaccard
+            r["time"] = now
+            updated = True
             break
+    if not updated:
+        records.append({"query_id": query_id, "jaccard": jaccard, "time": now})
 
-    # 将本轮标注写入 item
-    item["relevance"] = new_relevance
-    item["expected_chunk_ids"] = sorted(new_relevance.keys())
-    if "reference_facts" not in item and "ground_truth" in item:
-        item["reference_facts"] = item.pop("ground_truth")
+    with open(_RELIABILITY_PATH, "w", encoding="utf-8") as f:
+        f.write("# AI Auto-Annotation Reliability\n")
+        f.write("# Format: query_id jaccard time\n\n")
+        for r in records:
+            f.write(f"{r['query_id']} {r['jaccard']:.3f} {r['time']}\n")
+        if records:
+            mean_jac = sum(r["jaccard"] for r in records) / len(records)
+            f.write(f"\n---\n{mean_jac:.3f}\n")
 
-    if "query_id" not in item:
-        item["query_id"] = f"Q{idx + 1:04d}"
 
-
-_PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-_BENCHMARK_PATH = os.path.join(_PROJECT_DIR, "benchmark_private.json")
-
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
 
 def main():
     if not os.path.exists(_BENCHMARK_PATH):
@@ -184,36 +285,41 @@ def main():
     doc_index = build_doc_index(store)
     items = load_benchmark(_BENCHMARK_PATH)
 
-    # 按 source_doc 分组（保留原始顺序）
-    groups: dict[str, list[tuple[int, dict]]] = defaultdict(list)
-    for idx, item in enumerate(items):
-        source_doc = item.get("source_doc", "")
-        groups[source_doc].append((idx, item))
+    # 统计
+    total = len(items)
+    unannotated = sum(1 for e in items if not e.get("relevance"))
+    annotated = total - unannotated
+    print(f"总条目: {total}  已标注: {annotated}  未标注: {unannotated}")
 
-    for source_doc, entries in groups.items():
+    # 逐条处理（按 query_id 顺序）
+    for i, entry in enumerate(items):
+        qid = entry.get("query_id", f"Q{i+1:04d}")
+        source_doc = entry.get("source_doc", "")
+
+        # 查找 chunk 索引
         chunk_by_index = doc_index.get(source_doc)
         if chunk_by_index is None:
+            # 模糊匹配
             for doc_id, ci_map in doc_index.items():
                 if doc_id in source_doc or source_doc in doc_id:
                     chunk_by_index = ci_map
                     print(f"  匹配: source_doc='{source_doc}' → doc_id='{doc_id}'")
                     break
+
         if chunk_by_index is None:
-            print(f"\n  ⚠ 未找到文档 '{source_doc}' 的 chunk，跳过 {len(entries)} 条")
+            print(f"\n  ⚠ [{qid}] 未找到 source_doc='{source_doc}' 的 chunk，跳过")
             continue
 
-        print(f"\n  文档: {source_doc}  chunk_index 范围: {min(chunk_by_index)} ~ {max(chunk_by_index)}  共 {len(chunk_by_index)} 个")
-        print(f"  {len(entries)} 条待标注\n")
+        print(f"\n{'#' * 60}")
+        print(f"# [{i + 1}/{total}]  {qid}  source_doc: {source_doc}")
+        print(f"# chunks: {len(chunk_by_index)} ({min(chunk_by_index)} ~ {max(chunk_by_index)})")
+        print(f"{'#' * 60}")
 
-        for idx, item in entries:
-            if is_annotated(item):
-                continue
-            annotate_item(idx, item, chunk_by_index, source_doc)
-            save_benchmark(items, _BENCHMARK_PATH)
+        should_continue = annotate_entry(entry, chunk_by_index, source_doc)
+        save_benchmark(items, _BENCHMARK_PATH)
 
-        raw = input(f"  文档 '{source_doc}' 标注完毕，Enter 继续 / e 退出程序\n  > ").strip().lower()
-        if raw == EXIT_KEY:
-            print("退出。")
+        if not should_continue:
+            print("退出标注。")
             return
 
 
