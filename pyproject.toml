@@ -19,6 +19,11 @@ dependencies = [
     "rank-bm25>=0.2",
     "jieba>=0.42",
     "redis>=5.0",
+    "elasticsearch>=8.14,<9.0",
+    "psycopg2-binary>=2.9.12",
+    "pymilvus>=3.0.1",
+    "tree-sitter>=0.26.0",
+    "tree-sitter-languages>=1.10.2",
 ]
 
 [project.optional-dependencies]
