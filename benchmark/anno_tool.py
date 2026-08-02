@@ -3,7 +3,6 @@
 特性：
   - 启动时可指定从第 N 条开始（断点续标）
   - 逐块展示 chunk 全文，Enter 标注 / e 跳过 / m 结束本条
-  - 标注完成后自动计算 AI 标注可信度（Jaccard），写入 auto_reliability.md
 
 用法:  uv run python benchmark/anno_tool.py
 """
@@ -26,7 +25,6 @@ DONE_KEY = "m"
 VALID_DIFFICULTIES = ["single_chunk", "multi_chunk"]
 
 _BENCHMARK_PATH = os.path.join(_PROJECT_DIR, "benchmark", "private.json")
-_RELIABILITY_PATH = os.path.join(_PROJECT_DIR, "benchmark", "auto_reliability.md")
 
 
 # ---------------------------------------------------------------------------
@@ -132,10 +130,6 @@ def annotate_entry(
     existing_ids = entry.get("expected_chunk_ids", [])
     ref = entry.get("reference_facts") or entry.get("ground_truth", "")
 
-    # 捕获 AI 标注：relevance 为空说明 AI 未标注，本条的 expected_chunk_ids 即 AI 预测结果
-    is_ai_entry = not entry.get("relevance")
-    ai_chunks = list(existing_ids) if is_ai_entry else None
-
     # ---- 步骤 1: 已有标注时询问是否重新输入 ----
     if existing_ids:
         print(f"\n{'=' * 60}")
@@ -196,76 +190,8 @@ def annotate_entry(
     if "query_id" not in entry:
         entry["query_id"] = "Q0000"
 
-    # 计算 AI 标注可信度
-    if ai_chunks is not None:
-        jac = compute_jaccard(ai_chunks, new_chunk_ids)
-        save_reliability(qid, jac)
-        print(f"  AI 可信度 (Jaccard): {jac:.3f}")
-
     print(f"\n  ✓ [{qid}] 标注完成: {len(new_chunk_ids)} chunks, difficulty={current_diff}\n")
     return True
-
-
-# ---------------------------------------------------------------------------
-# AI 标注可信度
-# ---------------------------------------------------------------------------
-
-def compute_jaccard(ai_chunks: list[str], human_chunks: list[str]) -> float:
-    """两个 chunk_id 集合的 Jaccard 相似度。两者均为空 → 1.0；一者为空 → 0.0。"""
-    ai_set = set(ai_chunks)
-    human_set = set(human_chunks)
-    union = ai_set | human_set
-    if not union:
-        return 1.0
-    return len(ai_set & human_set) / len(union)
-
-
-def load_reliability() -> list[dict]:
-    """从 auto_reliability.md 读取已有记录。"""
-    records = []
-    if os.path.exists(_RELIABILITY_PATH):
-        with open(_RELIABILITY_PATH, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or line.startswith("---"):
-                    continue
-                parts = line.split()
-                if len(parts) >= 3:
-                    try:
-                        records.append({
-                            "query_id": parts[0],
-                            "jaccard": float(parts[1]),
-                            "time": " ".join(parts[2:]),
-                        })
-                    except ValueError:
-                        pass
-    return records
-
-
-def save_reliability(query_id: str, jaccard: float):
-    """追加/更新单条可信度记录，重写 auto_reliability.md。"""
-    from datetime import datetime
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    records = load_reliability()
-    updated = False
-    for r in records:
-        if r["query_id"] == query_id:
-            r["jaccard"] = jaccard
-            r["time"] = now
-            updated = True
-            break
-    if not updated:
-        records.append({"query_id": query_id, "jaccard": jaccard, "time": now})
-
-    with open(_RELIABILITY_PATH, "w", encoding="utf-8") as f:
-        f.write("# AI Auto-Annotation Reliability\n")
-        f.write("# Format: query_id jaccard time\n\n")
-        for r in records:
-            f.write(f"{r['query_id']} {r['jaccard']:.3f} {r['time']}\n")
-        if records:
-            mean_jac = sum(r["jaccard"] for r in records) / len(records)
-            f.write(f"\n---\n{mean_jac:.3f}\n")
 
 
 # ---------------------------------------------------------------------------
