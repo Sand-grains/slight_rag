@@ -22,6 +22,10 @@
     - _PROJECT_ROOT: 项目根目录 Path（CWD 无关）
     - EVAL_THREADPOOL_WORKERS / JUDGE_MAX_RETRY / JUDGE_BASE_DELAY / JUDGE_DEADLINE: Eval 并发与重试参数
     - COST_INPUT_1K_PRICE / COST_OUTPUT_1K_PRICE: 成本估算单价
+    - STORAGE_BACKEND: 存储后端 "memory" | "external"
+    - MILVUS_CONNECTION_URI / MILVUS_COLLECTION / MILVUS_HNSW_EF: Milvus 连接与检索参数
+    - ES_CONNECTION_URI / ES_INDEX: Elasticsearch 连接与索引名
+    - POSTGRES_CONNECTION_URI / PG_PENDING_CLEANUP_MINUTES: PostgreSQL 连接与回滚 TTL
 """
 
 import hashlib
@@ -82,7 +86,7 @@ GENERATOR_CONFIG_HASH = hashlib.sha256(_generator_fingerprint.encode()).hexdiges
 
 
 # Embedding 模型路径，首次运行自动从 HuggingFace 下载到本地缓存
-EMBEDDING_MODEL_PATH = "D:/Model"  # BGE-M3, 1024 维, 本地路径
+EMBEDDING_MODEL_PATH = "D:\Model\BGE-M3"  # BGE-M3, 1024 维, 本地路径
 
 # chunk配置层
 # v5: CHUNK_SIZE = 500   # 滑动窗口大小
@@ -107,6 +111,22 @@ JUDGE_MAX_RETRY = int(os.getenv("JUDGE_MAX_RETRY", "3"))        # 最大重试�
 JUDGE_BASE_DELAY = float(os.getenv("JUDGE_BASE_DELAY", "1.0"))      # 指数退避初始延迟（秒）
 JUDGE_DEADLINE = float(os.getenv("JUDGE_DEADLINE", "120.0"))        # 单次 LLM 调用超时（秒）
 
-# ---- 成本监控 ----
+# ========== 存储后端开关 ==========
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory")  # "memory" = numpy+pickle, "external" = PgSQL+ES+Milvus
+
+# ========== Milvus 配置 ==========
+MILVUS_CONNECTION_URI = os.getenv("MILVUS_CONNECTION_URI", "http://localhost:19530")
+MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "rag_chunks")
+MILVUS_HNSW_EF = int(os.getenv("MILVUS_HNSW_EF", "128"))
+
+# ========== Elasticsearch 配置 ==========
+ES_CONNECTION_URI = os.getenv("ES_CONNECTION_URI", "http://localhost:9200")
+ES_INDEX = os.getenv("ES_INDEX", "rag_chunks")
+
+# ========== PostgreSQL 配置 ==========
+POSTGRES_CONNECTION_URI = os.getenv("POSTGRES_CONNECTION_URI", "postgresql://postgres@localhost:5432/postgres")
+PG_PENDING_CLEANUP_MINUTES = int(os.getenv("PG_PENDING_CLEANUP_MINUTES", "30"))
+
+# ---- 成本监控配置 ----
 COST_INPUT_1K_PRICE = float(os.getenv("COST_INPUT_1K_PRICE", "0.0003"))
 COST_OUTPUT_1K_PRICE = float(os.getenv("COST_OUTPUT_1K_PRICE", "0.0012"))

@@ -14,7 +14,7 @@
 """
 
 from pathlib import Path
-from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL  # 先加载 .env，确保后续导入的库能读到环境变量
+from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, STORAGE_BACKEND  # 先加载 .env，确保后续导入的库能读到环境变量
 from hello_agents import HelloAgentsLLM, SimpleAgent, ToolRegistry
 from indexing.loader import load
 from indexing.chunker import chunk
@@ -47,7 +47,7 @@ print(f"向量化完成，维度: {len(vectors[0])}")
 store = IndexStore()
 store.batch_add(chunks, vectors)
 store.vector_persistence()
-print("向量入库完成")
+print(f"向量入库完成（{STORAGE_BACKEND} 模式）")
 
 # ==================== Agent 层 ====================
 
