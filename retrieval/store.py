@@ -10,7 +10,7 @@ from typing import List
 from rank_bm25 import BM25Okapi
 from indexing.chunk import Chunk
 from config import TOP_K, VECTOR_CACHE_DIR, STORAGE_BACKEND
-from indexing.ingest import ingest_chunks, cleanup_suspending
+from indexing.chunk_ingest import ingest_chunks, cleanup_suspending
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
