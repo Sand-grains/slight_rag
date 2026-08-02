@@ -300,8 +300,13 @@ def run_judge(
     model: str | None = None,
     formatter: Formatter | None = None,
     temperature: float = 0.0,
+    skip_cache: bool = False,
 ) -> JudgeResult:
-    """执行完整的双调用 Judge 流程，返回 JudgeResult。"""
+    """执行完整的双调用 Judge 流程，返回 JudgeResult。
+
+    skip_cache=True 时绕过缓存读写——校准路径同 query+context 评不同答案，
+    缓存键不含 answer 会串台，须强制绕过。
+    """
     if client is None:
         client = _get_client()
     if model is None:
@@ -312,12 +317,13 @@ def run_judge(
     context_str = build_judge_context(chunks)
     answer_str = answer or "（模型未生成回答）"
 
-    # 查缓存（v5: 不再包含 answer_hash）
+    # 查缓存（v5: 不再包含 answer_hash；校准路径 skip_cache=True 强制绕过）
     prompt_version_hash = formatter.prompt_version_hash
     cache_key = _cache_judge_key(query_id, context_str, prompt_version_hash, model)
-    cached = get_judge_cache(cache_key)
-    if cached is not None:
-        return cached
+    if not skip_cache:
+        cached = get_judge_cache(cache_key)
+        if cached is not None:
+            return cached
 
     result = JudgeResult(query_id=query_id)
 
@@ -382,7 +388,8 @@ def run_judge(
     }
     result.verdict = execute_verdict(scores)
 
-    # 写缓存
-    set_judge_cache(cache_key, result)
+    # 写缓存（skip_cache=True 不写，避免校准结果污染主评测键空间）
+    if not skip_cache:
+        set_judge_cache(cache_key, result)
 
     return result
