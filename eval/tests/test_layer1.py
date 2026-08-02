@@ -14,13 +14,13 @@ from datetime import datetime
 store = IndexStore.vector_restore("D:/Pycharm/slight_rag/.vector_cache/")
 retriever = Retriever(store)
 
-result = load_benchmark("D:/Pycharm/slight_rag/benchmark_private.json", valid_chunk_ids=store.chunk_ids)
+result = load_benchmark("D:/Pycharm/slight_rag/benchmark/private.json", valid_chunk_ids=store.chunk_ids)
 print(f"Items: {len(result.valid_items)}")
 
 output = run_retrieval_eval(retriever, result.valid_items)
 
 ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
 results_dir = os.path.join("D:/Pycharm/slight_rag/eval/results", ts)
-run_info = build_run_info("benchmark_private.json")
+run_info = build_run_info("benchmark/private.json")
 generate_report(output, results_dir, run_info)
 print(f"Report: {results_dir}")

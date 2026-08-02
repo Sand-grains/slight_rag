@@ -12,7 +12,7 @@ from config import TOP_K, LLM_MODEL_ID
 
 store = IndexStore.vector_restore("D:/Pycharm/slight_rag/.vector_cache/")
 retriever = Retriever(store)
-result = load_benchmark("D:/Pycharm/slight_rag/benchmark_private.json", valid_chunk_ids=store.chunk_ids)
+result = load_benchmark("D:/Pycharm/slight_rag/benchmark/private.json", valid_chunk_ids=store.chunk_ids)
 
 item = result.valid_items[0]
 print(f"Q: {item.query}")

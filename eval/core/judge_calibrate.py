@@ -86,7 +86,7 @@ def run_calibrate() -> dict:
     generator = Generator(model=LLM_MODEL_ID)
     _get_client()  # 主线程预初始化
 
-    result = load_benchmark("benchmark_private.json", valid_chunk_ids=store.chunk_ids)
+    result = load_benchmark("benchmark/private.json", valid_chunk_ids=store.chunk_ids)
     samples = result.valid_items[:CALIBRATION_SAMPLE_COUNT]
 
     print(f"校准样本: {len(samples)} 条")

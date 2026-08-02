@@ -19,11 +19,11 @@
     - run_compare: 对比两次运行
     - main: argparse CLI 入口
 
-默认读 benchmark_private.json，可用 --benchmark 指定其他文件。结果写入 eval/results/<timestamp>/
+默认读 benchmark/private.json，可用 --benchmark 指定其他文件。结果写入 eval/results/<timestamp>/
     # 仅 Layer 1（检索指标，不调 LLM，免费）
     uv run python -m eval.runner --mode retrieval
 
-    # 完整评估（Layer 1 + Layer 2，调 Judge LLM，计费）
+    # 完整评估（Layer 1 + Layer 2，调 Judge LLM，需计费）
     uv run python -m eval.runner --mode full
 
     # 对比某两次运行
@@ -44,7 +44,7 @@ from pathlib import Path
 from retrieval.store import IndexStore
 from retrieval.retriever import Retriever
 from retrieval.generator import Generator
-from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID, EVAL_THREADPOOL_WORKERS, GENERATOR_TEMPERATURE
+from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID, EVAL_THREADPOOL_WORKERS, GENERATOR_TEMPERATURE, STORAGE_BACKEND
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent  # eval/runner.py → eval/ → 项目根
 
@@ -143,7 +143,7 @@ def _evaluate_one(item, retriever, generator):
 
 
 def run_retrieval_mode(benchmark_path: str):
-    """仅对 Layer 1 retrieval 进行评估（v5: MonitorPanel 终端报告）。"""
+    """仅对 Layer 1 retrieval 进行评估"""
     from eval.core.benchmark import load_benchmark
     from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
@@ -153,10 +153,10 @@ def run_retrieval_mode(benchmark_path: str):
     reset_metrics()
     metrics = get_metrics()
 
-    print("加载索引...")
+    print(f"加载索引（{STORAGE_BACKEND} 模式）...")
     store = IndexStore.vector_restore()
     if store is None:
-        print("错误: 索引缓存不存在")
+        print("错误: 索引缓存不存在（memory 模式下需先运行 agent_pipeline.py 入库）")
         sys.exit(1)
     retriever = Retriever(store)
 
@@ -187,7 +187,7 @@ def run_retrieval_mode(benchmark_path: str):
 
 
 def run_full_mode(benchmark_path: str):
-    """Layer 1 + Layer 2 完整评估（v5: MonitorPanel 终端监控）。"""
+    """Layer 1 + Layer 2 完整评估"""
     from eval.core.benchmark import load_benchmark
     from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
@@ -198,10 +198,10 @@ def run_full_mode(benchmark_path: str):
     reset_metrics()
     metrics = get_metrics()
 
-    print("加载索引...")
+    print(f"加载索引（{STORAGE_BACKEND} 模式）...")
     store = IndexStore.vector_restore()
     if store is None:
-        print("错误: 索引缓存不存在")
+        print("错误: 索引缓存不存在（memory 模式下需先运行 agent_pipeline.py 入库）")
         sys.exit(1)
     retriever = Retriever(store)
     generator = Generator(model=LLM_MODEL_ID)
@@ -327,7 +327,7 @@ def main():
         logging.getLogger(noisy).setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(description="slight_rag eval runner")
     parser.add_argument("--mode", choices=["retrieval", "full"], help="评估模式")
-    parser.add_argument("--benchmark", default="benchmark_private.json", help="benchmark 文件路径")
+    parser.add_argument("--benchmark", default="benchmark/private.json", help="benchmark 文件路径")
     parser.add_argument("--compare", nargs=2, metavar=("RUN_A", "RUN_B"), help="对比两次运行")
     args = parser.parse_args()
 

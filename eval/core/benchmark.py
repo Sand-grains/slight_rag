@@ -9,7 +9,7 @@
 用法示例::
 
     from eval.core.benchmark import load_benchmark, BenchmarkItem, BenchmarkLoadResult
-    result = load_benchmark("benchmark_private.json", valid_chunk_ids=store.chunk_ids)
+    result = load_benchmark("benchmark/private.json", valid_chunk_ids=store.chunk_ids)
     for item in result.valid_items:
         print(item.query_id, item.query, item.expected_chunk_ids)
 
