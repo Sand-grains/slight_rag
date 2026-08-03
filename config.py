@@ -28,19 +28,24 @@
     - POSTGRES_CONNECTION_URI / PG_PENDING_CLEANUP_MINUTES: PostgreSQL 连接与回滚 TTL
 """
 
-import hashlib
 import os
+import hashlib
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent / ".env")  # 基于 config.py 自身位置定位 .env, 不依赖 CWD
 
-# DeepSeek API 配置，从 .env 读取
+# LLM API 配置，从 .env 读取
 LLM_API_KEY = os.getenv("LLM_API_KEY")        # API 密钥
 LLM_MODEL_ID = os.getenv("LLM_MODEL_ID")      # 模型 ID，如 deepseek-v4-pro
 LLM_BASE_URL = os.getenv("LLM_BASE_URL")      # API 地址，如 https://api.deepseek.com
 
-EVAL_LLM_MODEL_ID = os.getenv("EVAL_LLM_MODEL_ID", "deepseek-chat")  # 评估专用低成本模型
+EVAL_LLM_MODEL_ID = os.getenv("EVAL_LLM_MODEL_ID", "deepseek-v4-flash")  # 评估专用低成本模型
+
+# === Generator 配置常量（eval 场景专用）===
+GENERATOR_TEMPERATURE = float(os.getenv("GENERATOR_TEMPERATURE", "0"))
+GENERATOR_MAX_TOKENS = int(os.getenv("GENERATOR_MAX_TOKENS", "0")) or None  # 0 表示不截断
+GENERATOR_TOP_P = float(os.getenv("GENERATOR_TOP_P", "1.0"))
 
 # === Generator prompt template（从 retrieval/generator.py 迁入, 本质是配置常量）===
 GENERATOR_PROMPT_TEMPLATE = """
@@ -66,14 +71,6 @@ GENERATOR_PROMPT_TEMPLATE = """
 ## 回答
 请开始回答:"""
 
-# === Generator 配置常量（eval 场景专用）===
-GENERATOR_TEMPERATURE = float(os.getenv("GENERATOR_TEMPERATURE", "0"))
-GENERATOR_MAX_TOKENS = int(os.getenv("GENERATOR_MAX_TOKENS", "0")) or None  # 0 表示不截断
-GENERATOR_TOP_P = float(os.getenv("GENERATOR_TOP_P", "1.0"))
-
-# === 监控模式 ===
-MONITOR_PANEL_MODE = os.getenv("MONITOR_PANEL_MODE", "ansi")  # "ansi" 或 "plain"
-
 # === Generator 配置指纹（模块级常量, 一次计算, 整个 eval run 不变）===
 _generator_fingerprint = "|".join([
     LLM_MODEL_ID,
@@ -84,49 +81,70 @@ _generator_fingerprint = "|".join([
 ])
 GENERATOR_CONFIG_HASH = hashlib.sha256(_generator_fingerprint.encode()).hexdigest()[:12]
 
+# === 监控模式 ===
+MONITOR_PANEL_MODE = os.getenv("MONITOR_PANEL_MODE", "ansi")  # "ansi" 或 "plain"
 
 # Embedding 模型路径，首次运行自动从 HuggingFace 下载到本地缓存
 EMBEDDING_MODEL_PATH = "D:\Model\BGE-M3"  # BGE-M3, 1024 维, 本地路径
 
 # chunk配置层
-# v5: CHUNK_SIZE = 500   # 滑动窗口大小
-# v5: CHUNK_OVERLAP = 100   # 滑动窗口重叠
+# v5: CHUNK_SIZE = 500  CHUNK_OVERLAP = 100  # 滑动窗口
 CHILD_CHUNK_SIZE = 300    # 子块默认 chunk_size（字符数）
 CHILD_OVERLAP = 50        # 子块默认 overlap（字符数）
 TOP_K = 5                 # 检索时返回相似度最高的 Top-K 个 chunk
-# RELEVANCE_THRESHOLD = float(os.getenv("RELEVANCE_THRESHOLD", "0.6"))  # v6 已不再使用
+
+# RRF
 RRF_K = 60                # RRF 融合 k 值（从 retriever.py 迁入）
 
-# ---- 向量缓存目录 ----
+# Splitter 配置
+PARENT_CHUNK_SIZE = 1200   # 父块默认 chunk_size（flat_parent_child，父=4×子）
+PARENT_OVERLAP = 0         # 父块 overlap 始终为 0（父块是最终返回文本，不需重叠防止语义断裂）
+PARENT_MAX_CHARS = 8000    # 父级安全上限（≈3000+ token；prompt 预算 + BM25 长度归一化）
+SEPARATORS = ["\n\n", "\n", "。", "！", "？", "；", "，", " ", ""]   # 递归切分分隔符栈（优先级从高到低）
+SUBTITLE_SPLIT_RULES = [
+    ("#", "h1"),
+    ("##", "h2"),
+    ("###", "h3"),
+    ("####", "h4"),
+]
+
+# DocQualityReport 阈值
+EMBEDDING_MODEL_TOKEN_CONSTRAINT = 8192    # BGE-M3 Embedding模型 token 硬上限（诊断告警，不参与路由）
+SUBTITLE_DENSITY_THRESHOLD = 2000          # 每 N 字符内至少一个 Subtitle
+SUBTITLE_DENSITY_MIN_OK = 3                # 豁免: has_h1 + 总标题数 ≥ 此值则 density_ok
+CHUNK_TOO_FRAGMENTED_THRESHOLD = 200       # section token 中位数低于此值视为文本过碎
+TEXT_RATIO_WARN_THRESHOLD = 0.3            # 纯文本占比低于此值警告
+
+# 向量缓存目录
 VECTOR_CACHE_DIR = str(Path(__file__).resolve().parent / ".vector_cache")
 
-# ---- 项目根（CWD 无关） ----
+# 项目根（CWD 无关）
 _PROJECT_ROOT = Path(__file__).resolve().parent
 
-# ---- Eval 并发 ----
+# Eval 并发加速
 EVAL_THREADPOOL_WORKERS = int(os.getenv("EVAL_THREADPOOL_WORKERS", "5"))  # 外层线程池 worker 数（query 级并发）
 
-# ---- Judge 重试 ----
+# Judge 重试
 JUDGE_MAX_RETRY = int(os.getenv("JUDGE_MAX_RETRY", "3"))        # 最大重试次数
 JUDGE_BASE_DELAY = float(os.getenv("JUDGE_BASE_DELAY", "1.0"))      # 指数退避初始延迟（秒）
 JUDGE_DEADLINE = float(os.getenv("JUDGE_DEADLINE", "120.0"))        # 单次 LLM 调用超时（秒）
 
-# ========== 存储后端开关 ==========
-STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory")  # "memory" = numpy+pickle, "external" = PgSQL+ES+Milvus
+# 存储后端开关(memory/external)
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory")
 
-# ========== Milvus 配置 ==========
+# Milvus 配置
 MILVUS_CONNECTION_URI = os.getenv("MILVUS_CONNECTION_URI", "http://localhost:19530")
-MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "rag_chunks")
+MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "rag_child_chunks")
 MILVUS_HNSW_EF = int(os.getenv("MILVUS_HNSW_EF", "128"))
 
-# ========== Elasticsearch 配置 ==========
+# Elasticsearch 配置
 ES_CONNECTION_URI = os.getenv("ES_CONNECTION_URI", "http://localhost:9200")
-ES_INDEX = os.getenv("ES_INDEX", "rag_chunks")
+ES_INDEX = os.getenv("ES_INDEX", "rag_parents_chunks")
 
-# ========== PostgreSQL 配置 ==========
+# PostgreSQL 配置
 POSTGRES_CONNECTION_URI = os.getenv("POSTGRES_CONNECTION_URI", "postgresql://postgres@localhost:5432/postgres")
 PG_PENDING_CLEANUP_MINUTES = int(os.getenv("PG_PENDING_CLEANUP_MINUTES", "30"))
 
-# ---- 成本监控配置 ----
+# 成本监控配置
 COST_INPUT_1K_PRICE = float(os.getenv("COST_INPUT_1K_PRICE", "0.0003"))
 COST_OUTPUT_1K_PRICE = float(os.getenv("COST_OUTPUT_1K_PRICE", "0.0012"))
