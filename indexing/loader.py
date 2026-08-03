@@ -32,7 +32,9 @@ def load(file_path: str, base_dir: str = "data") -> List[Chunk]:
 
 
 def _load_text(path: Path, base_dir: Path = Path("data")) -> List[Chunk]:
-    """一次性读取全文件，内容作为单个大 Chunk 对象返回"""
+    """一次性读取全文件，内容作为单个大 Chunk 对象返回
+    文档 -> Chunk对象就是在这里被抽象出来的
+    """
     content = path.read_text(encoding="utf-8")
     try:
         relative = path.relative_to(base_dir)
