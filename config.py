@@ -101,7 +101,7 @@ PARENT_CHUNK_SIZE = 1200   # 父块默认 chunk_size（flat_parent_child，父=4
 PARENT_OVERLAP = 0         # 父块 overlap 始终为 0（父块是最终返回文本，不需重叠防止语义断裂）
 PARENT_MAX_CHARS = 8000    # 父级安全上限（≈3000+ token；prompt 预算 + BM25 长度归一化）
 SEPARATORS = ["\n\n", "\n", "。", "！", "？", "；", "，", " ", ""]   # 递归切分分隔符栈（优先级从高到低）
-SUBTITLE_SPLIT_RULES = [
+HEADING_SPLIT_RULES = [
     ("#", "h1"),
     ("##", "h2"),
     ("###", "h3"),
@@ -110,8 +110,8 @@ SUBTITLE_SPLIT_RULES = [
 
 # DocQualityReport 阈值
 EMBEDDING_MODEL_TOKEN_CONSTRAINT = 8192    # BGE-M3 Embedding模型 token 硬上限（诊断告警，不参与路由）
-SUBTITLE_DENSITY_THRESHOLD = 2000          # 每 N 字符内至少一个 Subtitle
-SUBTITLE_DENSITY_MIN_OK = 3                # 豁免: has_h1 + 总标题数 ≥ 此值则 density_ok
+HEADING_DENSITY_THRESHOLD = 2000          # 每 N 字符内至少一个标题
+HEADING_DENSITY_MIN_OK = 3                # 豁免: has_h1 + 总标题数 ≥ 此值则 density_ok
 CHUNK_TOO_FRAGMENTED_THRESHOLD = 200       # section token 中位数低于此值视为文本过碎
 TEXT_RATIO_WARN_THRESHOLD = 0.3            # 纯文本占比低于此值警告
 
