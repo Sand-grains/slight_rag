@@ -19,7 +19,7 @@ from rank_bm25 import BM25Okapi
 
 from config import STORAGE_BACKEND, TOP_K, VECTOR_CACHE_DIR
 from indexing.chunk import Chunk, DocMetadata
-from indexing.chunk_ingest import cleanup_suspending, ingest_doc
+from indexing.chunk_ingest_ex import cleanup_suspending, ingest_doc
 
 _MEMORY_FORMAT_VERSION = 1
 
