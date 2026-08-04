@@ -23,9 +23,7 @@
     - EVAL_THREADPOOL_WORKERS / JUDGE_MAX_RETRY / JUDGE_BASE_DELAY / JUDGE_DEADLINE: Eval 并发与重试参数
     - COST_INPUT_1K_PRICE / COST_OUTPUT_1K_PRICE: 成本估算单价
     - STORAGE_BACKEND: 存储后端 "memory" | "external"
-    - MILVUS_CONNECTION_URI / MILVUS_COLLECTION / MILVUS_HNSW_EF: Milvus 连接与检索参数
-    - ES_CONNECTION_URI / ES_INDEX: Elasticsearch 连接与索引名
-    - POSTGRES_CONNECTION_URI / PG_PENDING_CLEANUP_MINUTES: PostgreSQL 连接与回滚 TTL
+    - 基础设施连接参数（MILVUS / ES / PostgreSQL / Redis）已下沉至 infra/config.py
 """
 
 import os
@@ -131,19 +129,6 @@ JUDGE_DEADLINE = float(os.getenv("JUDGE_DEADLINE", "120.0"))        # 单次 LLM
 
 # 存储后端开关(memory/external)
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "memory")
-
-# Milvus 配置
-MILVUS_CONNECTION_URI = os.getenv("MILVUS_CONNECTION_URI", "http://localhost:19530")
-MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "rag_child_chunks")
-MILVUS_HNSW_EF = int(os.getenv("MILVUS_HNSW_EF", "128"))
-
-# Elasticsearch 配置
-ES_CONNECTION_URI = os.getenv("ES_CONNECTION_URI", "http://localhost:9200")
-ES_INDEX = os.getenv("ES_INDEX", "rag_parents_chunks")
-
-# PostgreSQL 配置
-POSTGRES_CONNECTION_URI = os.getenv("POSTGRES_CONNECTION_URI", "postgresql://postgres@localhost:5432/postgres")
-PG_PENDING_CLEANUP_MINUTES = int(os.getenv("PG_PENDING_CLEANUP_MINUTES", "30"))
 
 # 成本监控配置
 COST_INPUT_1K_PRICE = float(os.getenv("COST_INPUT_1K_PRICE", "0.0003"))
