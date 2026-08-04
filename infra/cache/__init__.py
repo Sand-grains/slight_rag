@@ -25,7 +25,13 @@ _lock = threading.Lock()
 
 
 def get_cache() -> CacheBackend:
-    """模块级单例。Redis 不可用时自动降级为 NoopBackend。"""
+    """获取缓存后端单例：Redis 可用则用 Redis，否则降级为 NoopBackend。
+
+    模块级单例 + 双重检查锁，保证并发下只创建一次后端实例。
+
+    Returns:
+        CacheBackend：进程内唯一的缓存后端实例（RedisBackend 或 NoopBackend）。
+    """
     global _cache
     if _cache is None:
         with _lock:
@@ -36,8 +42,8 @@ def get_cache() -> CacheBackend:
                     backend = RedisBackend(REDIS_CONNECTION_URL, key_prefix=REDIS_KEY_PREFIX)
                     backend.set("__health_check__", "ok", ttl_seconds=10)
                     _cache = backend
-                    logging.info("Redis 缓存后端已连接: %s", REDIS_CONNECTION_URL)
-                except Exception as e:
-                    logging.warning("Redis 不可用，降级为 NoopBackend。错误: %s", e)
+                    logging.info("Redis 缓存后端已连接：%s", REDIS_CONNECTION_URL)
+                except Exception as error:
+                    logging.warning("Redis 不可用，降级为 NoopBackend。错误：%s", error)
                     _cache = NoopBackend()
     return _cache
