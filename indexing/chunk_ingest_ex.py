@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from config import PG_PENDING_CLEANUP_MINUTES
+from infra.config import PG_PENDING_CLEANUP_MINUTES
 
 if TYPE_CHECKING:
     from indexing.chunk import Chunk

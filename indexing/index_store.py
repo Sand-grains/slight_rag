@@ -208,7 +208,7 @@ class IndexStore:
 
     @classmethod
     def vector_restore(cls, cache_dir: str = VECTOR_CACHE_DIR) -> "IndexStore | None":
-        """从缓存恢复 store 实例。
+        """从缓存恢复 index_store 实例。
 
         Args:
             cache_dir: 缓存目录路径。
@@ -307,7 +307,7 @@ class IndexStore:
             cache_dir: 缓存目录路径。
 
         Returns:
-            IndexStore | None：恢复成功的 store 实例；缓存缺失或格式不符
+            IndexStore | None：恢复成功的 index_store 实例；缓存缺失或格式不符
             或解析失败时返回 None，由调用方触发重索引。
         """
         path = Path(cache_dir)
