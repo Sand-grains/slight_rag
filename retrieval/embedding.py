@@ -14,7 +14,6 @@
     - embed: 文本列表 → 归一化向量列表
 """
 
-from typing import List
 from config import EMBEDDING_MODEL_PATH          # 先加载配置（触发 load_dotenv()，设置 HF_ENDPOINT 等环境变量）
 from sentence_transformers import SentenceTransformer  # 后导入模型库（此时环境变量已就绪）
 
@@ -22,15 +21,26 @@ _model: SentenceTransformer | None = None  # 模块级单例，整个进程只�
 
 
 def _get_model() -> SentenceTransformer:
-    """延迟加载模型：首次调用时从本地缓存加载，后续直接复用，避免重复加载"""
+    """延迟加载 Embedding 模型：首次调用时从本地加载，后续直接复用。
+
+    Returns:
+        SentenceTransformer：进程内唯一的模型实例（模块级单例）。
+    """
     global _model
     if _model is None:
         _model = SentenceTransformer(EMBEDDING_MODEL_PATH)  # 首次加载模型到内存
     return _model
 
 
-def embed(texts: List[str]) -> List[List[float]]:  # 返回向量化后的高维数组
-    """将文本列表转为向量列表，每条向量已 L2 归一化（模长=1），点积即余弦相似度"""
+def embed(texts: list[str]) -> list[list[float]]:
+    """将文本列表编码为归一化向量列表，每条向量模长=1（点积即余弦相似度）。
+
+    Args:
+        texts: 待编码的文本列表。
+
+    Returns:
+        list[list[float]]：与 texts 一一对应的 L2 归一化向量。
+    """
     model = _get_model()
-    embeddings = model.encode(texts, normalize_embeddings=True)  # model.encode() 直接从本地缓存加载，normalize 确保向量模长为 1
+    embeddings = model.encode(texts, normalize_embeddings=True)  # normalize 确保向量模长=1 -> 作点积即可得到余弦相似度
     return embeddings.tolist()  # numpy 数组 → Python 原生 list，方便后续 JSON 序列化等操作
