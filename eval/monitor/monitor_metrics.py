@@ -15,7 +15,7 @@
     metrics = get_metrics()
     metrics.record_stage("retrieve", 120.5)
     metrics.record_llm_call("generator")
-    print(metrics.layer1_means())       # → {"recall_at_k": 0.8256, ...}
+    print(metrics.layer1_avgs())       # → {"recall_at_k": 0.8256, ...}
     print(metrics.stage_percentiles())  # → {"retrieve": {"p50": 120.5, ...}, ...}
 
 公共接口：
@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from eval.utils import mean_of, percentile, p95
+from eval.utils import avg_of, percentile, p95
 
 
 @dataclass
@@ -152,7 +152,7 @@ class MonitorMetrics:
         return p95(self.output_tokens_list)
 
     # ---- 聚合方法（MonitorPanel 面板和 render_final 共用）----
-    def layer1_means(self) -> dict[str, float]:
+    def layer1_avgs(self) -> dict[str, float]:
         results = list(self.layer1_results)
         if not results:
             return {}
@@ -166,17 +166,17 @@ class MonitorMetrics:
             "ndcg_at_k": sum(result.ndcg_at_k for result in results) / count,
         }
 
-    def layer2_means(self) -> dict[str, float | None]:
+    def layer2_avgs(self) -> dict[str, float | None]:
         results = list(self.layer2_results)
         valid_results = [result for result in results if result.faithfulness is not None]
         if not valid_results:
             return {}
         return {
-            "faithfulness": mean_of([result.faithfulness for result in valid_results]),
-            "answer_relevancy": mean_of([result.answer_relevancy for result in valid_results]),
-            "context_precision": mean_of([result.context_precision for result in valid_results]),
-            "context_recall": mean_of([result.context_recall for result in valid_results]),
-            "answer_correctness": mean_of([result.answer_correctness for result in valid_results]),
+            "faithfulness": avg_of([result.faithfulness for result in valid_results]),
+            "answer_relevancy": avg_of([result.answer_relevancy for result in valid_results]),
+            "context_precision": avg_of([result.context_precision for result in valid_results]),
+            "context_recall": avg_of([result.context_recall for result in valid_results]),
+            "answer_correctness": avg_of([result.answer_correctness for result in valid_results]),
         }
 
     def verdict_distribution(self) -> dict[str, int]:

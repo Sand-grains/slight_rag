@@ -7,7 +7,7 @@
         - read_json: eval/core/benchmark.py、eval/runner.py
         - write_json / append_jsonl / get_git_commit: eval/reporter.py
         - stem: eval/core/retrieval/retrieval_layer.py
-        - mean_of / p95: eval/monitor/monitor_metrics.py
+        - avg_of / p95: eval/monitor/monitor_metrics.py
         - format_time: eval/monitor/monitor_panel.py
         - fill: eval/core/llm_as_judge/judge_formatter.py
 
@@ -19,7 +19,7 @@
 
 公共接口：
     - 文件 I/O: read_json / write_json / append_jsonl
-    - 统计: mean_of / p95
+    - 统计: avg_of / p95
     - 字符串与路径: stem / fill
     - 时间: format_time
     - 数值与 LLM: clamp_score / extract_json
@@ -86,7 +86,7 @@ def append_jsonl(path: str, line: dict) -> None:
 
 # ---- 统计 ----
 
-def mean_of(values: list[float]) -> float | None:
+def avg_of(values: list[float]) -> float | None:
     """非 None 值均值；全为 None 时返回 None。
 
     引用方: eval/monitor/monitor_metrics.py。

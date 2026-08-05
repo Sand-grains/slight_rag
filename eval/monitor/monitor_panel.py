@@ -159,8 +159,8 @@ class MonitorPanel:
         try:
             while self._running:
                 with self._lock:
-                    layer1 = self.metrics.layer1_means()
-                    layer2 = self.metrics.layer2_means()
+                    layer1 = self.metrics.layer1_avgs()
+                    layer2 = self.metrics.layer2_avgs()
                     stages = self.metrics.stage_percentiles()
                     verdicts = self.metrics.verdict_distribution()
                     deltas = self._compute_deltas(self.metrics)
@@ -320,8 +320,8 @@ class MonitorPanel:
         """跑完后打印最终报告。从 metrics 读取全部数据。"""
         try:
             metrics = self.metrics
-            layer1 = metrics.layer1_means()
-            layer2 = metrics.layer2_means()
+            layer1 = metrics.layer1_avgs()
+            layer2 = metrics.layer2_avgs()
             stages = metrics.stage_percentiles()
             verdicts = metrics.verdict_distribution()
             deltas = self._compute_deltas(metrics)
