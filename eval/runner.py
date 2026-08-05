@@ -1,11 +1,14 @@
-"""Eval CLI 主入口：retrieval / full 两种模式 + --compare 对比。
+"""Eval CLI 主入口：retrieval / full 两种评估模式 + --compare 对比。
 
 核心特性：
     - --mode retrieval：仅 Layer 1 检索评估（不调 LLM，免费），MonitorPanel.final_report() 输出终端报告
     - --mode full：Layer 1 + Layer 2 完整评估（调 Judge LLM，计费），MonitorPanel daemon 实时面板 + 最终报告
     - --compare RUN_A RUN_B：对比两次运行的指标差异
-    - 外层 ThreadPoolExecutor（max_workers=5）控 query 级并发，_evaluate_one 做 per-query 隔离
+    - 外层 ThreadPoolExecutor（max_workers=EVAL_THREADPOOL_WORKERS）控 query 级并发，_evaluate_one 做 per-query 隔离
     - _load_previous_run() 加载最近一次 per_query.json 作为 Delta 基线
+
+默认读 benchmark/private_v6.json，可用 --benchmark 指定其他文件。
+结果写入 eval/results/timeline/<timestamp>/。
 
 用法示例::
 
@@ -18,18 +21,8 @@
     - run_full_mode: Layer 1 + Layer 2 完整评估（含 MonitorPanel）
     - run_compare: 对比两次运行
     - main: argparse CLI 入口
-
-默认读 benchmark/private.json，可用 --benchmark 指定其他文件。结果写入 eval/results/<timestamp>/
-    # 仅 Layer 1（检索指标，不调 LLM，免费）
-    uv run python -m eval.runner --mode retrieval
-
-    # 完整评估（Layer 1 + Layer 2，调 Judge LLM，需计费）
-    uv run python -m eval.runner --mode full
-
-    # 对比某两次运行
-    uv run python -m eval.runner --compare <run_id_1> <run_id_2>
-
 """
+from __future__ import annotations
 
 import argparse
 import json
@@ -40,19 +33,33 @@ import time as time_module
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from retrieval.store import IndexStore
+from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID, EVAL_THREADPOOL_WORKERS, GENERATOR_TEMPERATURE, STORAGE_BACKEND
+from indexing.index_store import IndexStore
 from retrieval.retriever import Retriever
 from retrieval.generator import Generator
-from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID, EVAL_THREADPOOL_WORKERS, GENERATOR_TEMPERATURE, STORAGE_BACKEND
+
+if TYPE_CHECKING:
+    from eval.core.benchmark import BenchmarkItem, BenchmarkLoadResult
+    from eval.core.llm_as_judge import JudgeResult
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent  # eval/runner.py → eval/ → 项目根
+
+
+# ---- 模块级状态 ----
 
 _OUTER_POOL: ThreadPoolExecutor | None = None
 
 
+# ---- 工具函数 ----
+
 def _get_outer_pool() -> ThreadPoolExecutor:
-    """模块级外层线程池单例。限制同时运行的 query 数。"""
+    """返回模块级外层线程池单例，限制同时运行的 query 数。
+
+    Returns:
+        ThreadPoolExecutor：供 run_full_mode 提交 per-query 任务的线程池。
+    """
     global _OUTER_POOL
     if _OUTER_POOL is None:
         _OUTER_POOL = ThreadPoolExecutor(
@@ -63,32 +70,65 @@ def _get_outer_pool() -> ThreadPoolExecutor:
 
 
 def _load_previous_run() -> dict[str, dict] | None:
-    """加载最近一次运行的 per_query.json（排除当前这次），按 query_id 索引。"""
+    """加载最近一次运行的 per_query.json（排除当前这次），按 query_id 索引。
+
+    Returns:
+        dict[str, dict] | None：最近一次含 Layer 2 结果（faithfulness）的 per_query 数据；无则 None。
+    """
     timeline = _PROJECT_ROOT / "eval" / "results" / "timeline"
     if not timeline.exists():
         return None
     runs = sorted(
-        [d for d in timeline.iterdir() if d.is_dir()],
+        [directory for directory in timeline.iterdir() if directory.is_dir()],
         reverse=True,
     )
     for run_dir in runs:
         per_query_path = run_dir / "per_query.json"
         if per_query_path.exists():
             try:
-                with open(per_query_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                with open(per_query_path, "r", encoding="utf-8") as file_handle:
+                    data = json.load(file_handle)
             except Exception:
                 continue
             if data and any(
-                "faithfulness" in v for v in data.values()
-                if isinstance(v, dict)
+                "faithfulness" in value for value in data.values()
+                if isinstance(value, dict)
             ):
                 return data
     return None
 
 
-def _evaluate_one(item, retriever, generator):
-    """单条 query 的完整 eval。含 Generator 缓存 + 阶段打点。try/except 隔离。"""
+def _load_summary(results_dir: str) -> dict | None:
+    """读取某次运行的 summary.json。
+
+    Args:
+        results_dir: 运行结果目录（eval/results/timeline/<run_id>）。
+
+    Returns:
+        dict | None：summary 内容；文件不存在时返回 None。
+    """
+    path = os.path.join(results_dir, "summary.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as file_handle:
+        return json.load(file_handle)
+
+
+# ---- 单条评估 ----
+
+def _evaluate_one(item: BenchmarkItem, retriever: Retriever, generator: Generator) -> JudgeResult:
+    """单条 query 的完整 eval：retrieve → Generator 缓存/生成 → Judge。
+
+    内含 Generator 缓存查/写 + 阶段耗时打点; 外层 try/except 隔离，异常时返回 error 判定的 JudgeResult。
+
+    Args:
+        item: 单条 benchmark 条目。
+        retriever: 检索器，负责双路召回。
+        generator: 生成器，负责产出回答（缓存 miss 时调用）。
+
+    Returns:
+        JudgeResult：含各阶段耗时与判定结果；异常时 verdict="error"。
+    """
     from eval.core.llm_as_judge import run_judge, JudgeResult
     from eval.core.judge_formatter import get_formatter, build_judge_context
     from eval.core.judge_cache import _cache_generator_key
@@ -99,30 +139,30 @@ def _evaluate_one(item, retriever, generator):
 
     try:
         # Stage: retrieve
-        t0 = time_module.time()
+        retrieve_start = time_module.time()
         chunks = retriever.retrieve(item.query, top_k=TOP_K)
-        retrieve_ms = (time_module.time() - t0) * 1000
+        retrieve_ms = (time_module.time() - retrieve_start) * 1000
 
         # Generator cache
         context_str = build_judge_context(chunks)
-        gen_cache_key = _cache_generator_key(item.query_id, context_str)
+        generator_cache_key = _cache_generator_key(item.query_id, context_str)
         cache_backend = get_cache_backend()
-        gen_cached = cache_backend.get(gen_cache_key)
+        generator_cached = cache_backend.get(generator_cache_key)
 
         metrics = get_metrics()
 
         # Stage: generate
-        if gen_cached is not None:
+        if generator_cached is not None:
             metrics.record_generator_cache_hit()
-            answer = gen_cached
+            answer = generator_cached
             generate_ms = 0.0
         else:
             metrics.record_generator_cache_miss()
-            t1 = time_module.time()
+            generate_start = time_module.time()
             answer = generator.generate(item.query, chunks, temperature=GENERATOR_TEMPERATURE)
-            generate_ms = (time_module.time() - t1) * 1000
+            generate_ms = (time_module.time() - generate_start) * 1000
             metrics.record_llm_call("generator")
-            cache_backend.set(gen_cache_key, answer, ttl_seconds=REDIS_DEFAULT_TTL)
+            cache_backend.set(generator_cache_key, answer, ttl_seconds=REDIS_DEFAULT_TTL)
 
         # Judge（temperature=0 保证确定性）
         result = run_judge(item.query_id, item.query, chunks, answer,
@@ -132,18 +172,50 @@ def _evaluate_one(item, retriever, generator):
         result.generate_ms = generate_ms
 
         return result
-    except Exception as e:
+    except Exception as error:
         panel = get_panel()
         if panel:
-            panel.alert(item.query_id, f"Generator {type(e).__name__}: {e}")
-        jr = JudgeResult(query_id=item.query_id)
-        jr.generator_error = f"evaluate_one failed: {e}"
-        jr.verdict = "error"
-        return jr
+            panel.alert(item.query_id, f"Generator {type(error).__name__}: {error}")
+        judge_result = JudgeResult(query_id=item.query_id)
+        judge_result.generator_error = f"evaluate_one failed: {error}"
+        judge_result.verdict = "error"
+        return judge_result
 
 
-def run_retrieval_mode(benchmark_path: str):
-    """仅对 Layer 1 retrieval 进行评估"""
+# ---- 评估模式 ----
+
+def _abort_if_invalid_benchmark(result: BenchmarkLoadResult) -> None:
+    """基准校验：expected_chunk_ids 与当前索引不一致 → 打印醒目警告并中止。
+
+    Phase 2 分块策略变更后旧标注整体失效，继续跑会产出全零假数据，拒绝执行。
+
+    Args:
+        result: benchmark 加载结果，含 invalid_chunk_ids 校验信息。
+    """
+    if not result.invalid_chunk_ids:
+        return
+    print("=" * 64)
+    print("⚠⚠  benchmark 含无效 expected_parent_ids（与当前索引的父块 chunk_id 集合不符）")
+    print(f"     共 {len(result.invalid_chunk_ids)} 条含缺失 id：")
+    for index, chunk_ids in list(result.invalid_chunk_ids.items())[:5]:
+        shown = ", ".join(chunk_ids[:5]) + ("..." if len(chunk_ids) > 5 else "")
+        print(f"       条目 #{index + 1}: 缺失 {shown}")
+    print("     分块策略已变更（父子块），旧标注整体失效。请先重标注：")
+    print("       uv run python benchmark/anno_tool.py --output benchmark/private_v6.json")
+    print("     已中止本次评估——拒绝产出全零假数据。")
+    print("=" * 64)
+    sys.exit(1)
+
+
+def run_retrieval_mode(benchmark_path: str) -> str:
+    """仅 Layer 1 检索评估（不调 LLM，免费），输出终端报告并落盘结果。
+
+    Args:
+        benchmark_path: benchmark 文件路径。
+
+    Returns:
+        str：本次运行结果目录（eval/results/timeline/<ts>）。
+    """
     from eval.core.benchmark import load_benchmark
     from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
@@ -162,11 +234,15 @@ def run_retrieval_mode(benchmark_path: str):
 
     print(f"加载 benchmark: {benchmark_path}")
     result = load_benchmark(benchmark_path, valid_chunk_ids=store.chunk_ids)
+    _abort_if_invalid_benchmark(result)
     items = result.valid_items
     total = len(items)
     print(f"  条目: {total}")
+    if total == 0:
+        print("错误: benchmark 无有效条目，中止")
+        sys.exit(1)
 
-    # MonitorPanel（仅 final_report，无 daemon 线程——retrieval 无 LLM，跑得太快）
+    # MonitorPanel（仅 final_report, 无 daemon 线程）
     previous_per_query = _load_previous_run()
     panel = MonitorPanel(metrics, previous_per_query)
     panel.set_total(total)
@@ -179,15 +255,22 @@ def run_retrieval_mode(benchmark_path: str):
     panel.query_count = total
     panel.final_report()
 
-    ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    results_dir = str(_PROJECT_ROOT / "eval" / "results" / "timeline" / ts)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    results_dir = str(_PROJECT_ROOT / "eval" / "results" / "timeline" / timestamp)
     run_info = build_run_info(benchmark_path)
     generate_report(output, results_dir, run_info)
     return results_dir
 
 
-def run_full_mode(benchmark_path: str):
-    """Layer 1 + Layer 2 完整评估"""
+def run_full_mode(benchmark_path: str) -> str:
+    """Layer 1 + Layer 2 完整评估（调 Judge LLM，计费），实时面板 + 落盘报告。
+
+    Args:
+        benchmark_path: benchmark 文件路径。
+
+    Returns:
+        str：本次运行结果目录（eval/results/timeline/<ts>）。
+    """
     from eval.core.benchmark import load_benchmark
     from eval.core.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
@@ -206,14 +289,18 @@ def run_full_mode(benchmark_path: str):
     retriever = Retriever(store)
     generator = Generator(model=LLM_MODEL_ID)
 
-    # 主线程预初始化 OpenAI client，避免并行区域多线程竞态
+    # 主线程预初始化 OpenAI client，避免并行区域多线程竞争
     _get_client()
 
     print(f"加载 benchmark: {benchmark_path}")
     result = load_benchmark(benchmark_path, valid_chunk_ids=store.chunk_ids)
+    _abort_if_invalid_benchmark(result)
     items = result.valid_items
     total = len(items)
     print(f"  条目: {total}")
+    if total == 0:
+        print("错误: benchmark 无有效条目，中止")
+        sys.exit(1)
 
     # 加载上次运行（Delta 基线）
     previous_per_query = _load_previous_run()
@@ -240,43 +327,43 @@ def run_full_mode(benchmark_path: str):
     pool = _get_outer_pool()
     futures = {}
     for item in items:
-        f = pool.submit(_evaluate_one, item, retriever, generator)
-        futures[f] = item
+        future = pool.submit(_evaluate_one, item, retriever, generator)
+        futures[future] = item
 
     try:
         for future in as_completed(futures):
-            jr = future.result()
-            judge_results.append(jr)
+            judge_result = future.result()
+            judge_results.append(judge_result)
 
             # 推入唯一真源
-            metrics.layer2_results.append(jr)
-            if jr.retrieve_ms is not None:
-                metrics.record_stage("retrieve", jr.retrieve_ms)
-            if jr.generate_ms is not None:
-                metrics.record_stage("generate", jr.generate_ms)
-            if jr.judge_faithfulness_ms is not None:
-                metrics.record_stage("judge_faithfulness", jr.judge_faithfulness_ms)
-            if jr.judge_quality_ms is not None:
-                metrics.record_stage("judge_quality", jr.judge_quality_ms)
+            metrics.layer2_results.append(judge_result)
+            if judge_result.retrieve_ms is not None:
+                metrics.record_stage("retrieve", judge_result.retrieve_ms)
+            if judge_result.generate_ms is not None:
+                metrics.record_stage("generate", judge_result.generate_ms)
+            if judge_result.judge_faithfulness_ms is not None:
+                metrics.record_stage("judge_faithfulness", judge_result.judge_faithfulness_ms)
+            if judge_result.judge_quality_ms is not None:
+                metrics.record_stage("judge_quality", judge_result.judge_quality_ms)
 
             # 端到端延迟 = retrieve + generate + max(faith, qual)，逐 query 计算后取百分位
-            if jr.retrieve_ms is not None and jr.generate_ms is not None:
-                e2e = jr.retrieve_ms + jr.generate_ms + max(
-                    jr.judge_faithfulness_ms or 0,
-                    jr.judge_quality_ms or 0,
+            if judge_result.retrieve_ms is not None and judge_result.generate_ms is not None:
+                end_to_end = judge_result.retrieve_ms + judge_result.generate_ms + max(
+                    judge_result.judge_faithfulness_ms or 0,
+                    judge_result.judge_quality_ms or 0,
                 )
-                metrics.record_stage("end_to_end", e2e)
+                metrics.record_stage("end_to_end", end_to_end)
 
             panel.query_done()
     finally:
-        panel.stop()  # 幂等
+        panel.stop()  # 保证幂等
 
     # 最终报告（终端）
     panel.final_report()
 
     # 写入文件报告
-    ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    results_dir = str(_PROJECT_ROOT / "eval" / "results" / "timeline" / ts)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    results_dir = str(_PROJECT_ROOT / "eval" / "results" / "timeline" / timestamp)
     run_info = build_run_info(benchmark_path, run_mode="full")
     generate_report(layer1, results_dir, run_info,
                     judge_results=judge_results,
@@ -286,8 +373,13 @@ def run_full_mode(benchmark_path: str):
     return results_dir
 
 
-def run_compare(run_a: str, run_b: str):
-    """对比两次运行的指标。"""
+def run_compare(run_a: str, run_b: str) -> None:
+    """对比两次运行的指标差异（终端表格输出）。
+
+    Args:
+        run_a: 第一次运行的 timeline 目录名。
+        run_b: 第二次运行的 timeline 目录名。
+    """
     base = str(_PROJECT_ROOT / "eval" / "results" / "timeline")
     dir_a = os.path.join(base, run_a)
     dir_b = os.path.join(base, run_b)
@@ -302,32 +394,28 @@ def run_compare(run_a: str, run_b: str):
     agg_a = summary_a["aggregate"]
     agg_b = summary_b["aggregate"]
 
-    metrics_list = ["recall_at_k", "precision_at_k", "hit_at_k", "mrr", "map_at_k", "ndcg_at_k"]
+    metrics_list = ["recall_at_k", "precision_at_k", "hit_at_k", "mrr", "map_at_k", "ndcg_at_k",
+                    "child_hit_at_k", "child_recall_at_k"]
     print(f"\n{'Metric':<18} {'Run A':>10} {'Run B':>10} {'Delta':>10}")
     print("-" * 50)
-    for m in metrics_list:
-        va = agg_a.get(m, 0)
-        vb = agg_b.get(m, 0)
-        delta = vb - va
+    for metric_name in metrics_list:
+        value_a = agg_a.get(metric_name, 0)
+        value_b = agg_b.get(metric_name, 0)
+        delta = value_b - value_a
         arrow = "↑" if delta > 0 else ("↓" if delta < 0 else " ")
-        print(f"{m:<18} {va:>10.4f} {vb:>10.4f} {arrow} {abs(delta):>8.4f}")
+        print(f"{metric_name:<18} {value_a:>10.4f} {value_b:>10.4f} {arrow} {abs(delta):>8.4f}")
 
 
-def _load_summary(results_dir: str) -> dict | None:
-    path = os.path.join(results_dir, "summary.json")
-    if not os.path.exists(path):
-        return None
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+# ---- CLI 入口 ----
 
-
-def main():
+def main() -> None:
+    """CLI 入口：路由 --mode / --compare 到对应执行函数。"""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     for noisy in ("httpx", "openai", "jieba", "sentence_transformers"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(description="slight_rag eval runner")
     parser.add_argument("--mode", choices=["retrieval", "full"], help="评估模式")
-    parser.add_argument("--benchmark", default="benchmark/private.json", help="benchmark 文件路径")
+    parser.add_argument("--benchmark", default="benchmark/private_v6.json", help="benchmark 文件路径")
     parser.add_argument("--compare", nargs=2, metavar=("RUN_A", "RUN_B"), help="对比两次运行")
     args = parser.parse_args()
 
