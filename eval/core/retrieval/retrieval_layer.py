@@ -9,7 +9,7 @@
 
 用法示例::
 
-    from eval.core.retrieval_layer import run_retrieval_eval
+    from eval.core.retrieval.retrieval_layer import run_retrieval_eval
     output = run_retrieval_eval(retriever, benchmark_items)
     print(output.aggregate["recall_at_k"])  # → 0.8256
 
@@ -214,13 +214,13 @@ def _aggregate(results: list[RetrievalEvalResult]) -> dict:
         "map_at_k": statistics.mean(result.map_at_k for result in results),
         "ndcg_at_k": statistics.mean(result.ndcg_at_k for result in results),
         "num_child_annotated": sum(1 for result in results if result.child_annotated),
-        "child_hit_at_k": _mean_child(results, "child_hit_at_k"),
-        "child_recall_at_k": _mean_child(results, "child_recall_at_k"),
+        "child_hit_at_k": _avg_child(results, "child_hit_at_k"),
+        "child_recall_at_k": _avg_child(results, "child_recall_at_k"),
         "diagnosis_distribution": _diagnosis_distribution(results),
     }
 
 
-def _mean_child(results: list[RetrievalEvalResult], attribute: str) -> float:
+def _avg_child(results: list[RetrievalEvalResult], attribute: str) -> float:
     """child 层指标均值：仅对标注了 expected_child_ids 的 query 求均值，其余不参与。
 
     Args:
