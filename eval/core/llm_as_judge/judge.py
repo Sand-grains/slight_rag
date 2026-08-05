@@ -97,7 +97,7 @@ class JudgeResult:
 def _call_llm(client: OpenAI, model: str, prompt: str,
              temperature: float = 0.0, query_id: str = "",
              call_type: str = "") -> dict:
-    """调用 LLM 并解析 JSON 输出（经 _extract_json 三层兜底）。
+    """调用 LLM 并解析 LLM 返回的 JSON 输出（经 _extract_json 三层兜底）。
 
     Args:
         client: OpenAI 兼容客户端。
@@ -168,7 +168,7 @@ def _judge_with_retry(
         base_delay: 退避基准延迟（秒），实际延迟乘随机 jitter 0.5~1.5。
         deadline: 单次调用的超时阈值（秒）。
         query_id: 当前 query_id（告警用）。
-        judge_type: 调用类型（faithfulness / quality），告警文案用。
+        judge_type: 调用类型（faithfulness / quality）。 告警用。
 
     Returns:
         tuple：judge_fn 的返回值（分数元组）。
@@ -257,10 +257,15 @@ def judge_faithfulness(
 
 
 def judge_quality(
-    client: OpenAI, model: str, formatter: Formatter,
-    query: str, context_str: str, answer: str, reference_facts: str,
-    temperature: float = 0.0, query_id: str = "",
-) -> tuple[float | None, float | None, float | None, float | None, str | None]:
+    client: OpenAI,
+    model: str,
+    formatter: Formatter,
+    query: str,
+    context_str: str,
+    answer: str,
+    reference_facts: str,
+    temperature: float = 0.0,
+    query_id: str = "", ) -> tuple[float | None, float | None, float | None, float | None, str | None]:
     """调用 2：评估四个质量维度。
 
     Args:
@@ -426,7 +431,7 @@ def run_judge(
     context_str = build_judge_context(chunks)
     answer_str = answer or "（模型未生成回答）"
 
-    # 查缓存（v5: 不再包含 answer_hash；校准路径 skip_cache=True 强制绕过）
+    # 查缓存（v5后不再包含 answer_hash）
     prompt_version_hash = formatter.prompt_version_hash
     cache_key = _cache_judge_key(query_id, context_str, prompt_version_hash, model)
     if not skip_cache:

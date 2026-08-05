@@ -150,7 +150,7 @@ def run_calibrate() -> dict:
             print(f"    bad (幻觉注入):\n{hallucinated_answer}\n")
             print(f"    bad (错误chunk喂入):\n{wrong_context_answer}\n")
 
-            # Judge（校准路径强制绕过缓存：同 query+context 评不同答案，缓存键不含 answer 会串台）
+            # Judge（校准路径 skip_cache=True 强制绕过缓存：同 query+context 评不同答案，缓存键不含 answer 会串台）
             good_result = run_judge(item.query_id, item.query, chunks, answer, item.reference_facts, skip_cache=True)
             hallucinated_result = run_judge(item.query_id, item.query, chunks, hallucinated_answer, item.reference_facts, skip_cache=True)
             # 坏答案 B 由错误 chunk 生成、用正确 chunks 评 → claims 无支撑 → faithfulness 真正降低
