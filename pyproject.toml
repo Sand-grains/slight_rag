@@ -24,6 +24,7 @@ dependencies = [
     "pymilvus>=3.0.1",
     "tree-sitter>=0.26.0",
     "tree-sitter-languages>=1.10.2",
+    "scipy>=1.17.1",
 ]
 
 [project.optional-dependencies]
