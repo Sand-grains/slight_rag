@@ -1,15 +1,16 @@
 """Benchmark 加载、校验、默认值填充。
 
 核心特性：
-    - 从 JSON 文件加载 benchmark，支持 query_id / query / category / difficulty / relevance / reference_facts / expected_chunk_ids 字段
-    - 校验 expected_chunk_ids 与 IndexStore 当前 chunk_id 集合的一致性（chunk 切分变更 → 校验失败，强制重新标注）
+    - 从 JSON 文件加载 benchmark，支持 query_id / query / category / difficulty / relevance / reference_facts / expected_parent_ids / expected_child_ids 字段
+    - 校验 expected_parent_ids 与 IndexStore 当前父块 chunk_id 集合的一致性（chunk 切分变更 → 校验失败，强制重新标注）
+    - expected_chunk_ids 旧 key 自动兼容（读取时回退），expected_child_ids 为证据子块（可选，缺省空）
     - 缺失字段自动填充默认值，兼容旧版 benchmark 格式
     - ground_truth 字段自动转换为 reference_facts（向前兼容）
 
 用法示例::
 
     from eval.core.benchmark import load_benchmark, BenchmarkItem, BenchmarkLoadResult
-    result = load_benchmark("benchmark/private.json", valid_chunk_ids=store.chunk_ids)
+    result = load_benchmark("benchmark/private_v5.json", valid_chunk_ids=index_store.chunk_ids)
     for item in result.valid_items:
         print(item.query_id, item.query, item.expected_chunk_ids)
 
@@ -35,10 +36,11 @@ class BenchmarkItem:
     source_doc: str
     category: str
     difficulty: str
-    expected_chunk_ids: list[str]
-    relevance: dict[str, int]  # chunk_id → 3/2/1
+    expected_parent_ids: list[str]
+    relevance: dict[str, int]  # parent chunk_id → 3/2/1
     expected_files: list[str]
     expected_pages: list[str]
+    expected_child_ids: list[str] = field(default_factory=list)  # 证据子块（可选，缺省空）
 
 
 @dataclass
@@ -78,13 +80,13 @@ def load_benchmark(path: str, valid_chunk_ids: set[str] | None = None) -> Benchm
             result.missing_difficulty.append(idx)
 
         query_id = item.get("query_id") or _auto_query_id(idx)
-        expected_chunk_ids = item.get("expected_chunk_ids", [])
-        relevance = item.get("relevance") or {cid: 3 for cid in expected_chunk_ids}
+        expected_parent_ids = item.get("expected_parent_ids") or item.get("expected_chunk_ids", [])
+        relevance = item.get("relevance") or {cid: 3 for cid in expected_parent_ids}
         reference_facts = item.get("reference_facts") or item.get("ground_truth", "")
 
-        # 校验 chunk_id 存在性
+        # 校验 parent chunk_id 存在性
         if valid_chunk_ids is not None:
-            missing = [cid for cid in expected_chunk_ids if cid not in valid_chunk_ids]
+            missing = [cid for cid in expected_parent_ids if cid not in valid_chunk_ids]
             if missing:
                 result.invalid_chunk_ids[idx] = missing
 
@@ -95,10 +97,11 @@ def load_benchmark(path: str, valid_chunk_ids: set[str] | None = None) -> Benchm
             source_doc=item.get("source_doc", ""),
             category=item.get("category") or "unknown",
             difficulty=item.get("difficulty") or "unknown",
-            expected_chunk_ids=expected_chunk_ids,
+            expected_parent_ids=expected_parent_ids,
             relevance=relevance,
             expected_files=item.get("expected_files", []),
             expected_pages=item.get("expected_pages", []),
+            expected_child_ids=item.get("expected_child_ids", []),
         ))
 
     return result
