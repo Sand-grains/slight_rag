@@ -1,1 +1,1 @@
-"""Eval 核心模块：benchmark、检索评估、Judge、缓存、终端面板、监控指标。"""
+"""Eval 核心模块：benchmark 加载、calculator 指标计算、retrieval 检索评估、llm_as_judge LLM-as-Judge。"""

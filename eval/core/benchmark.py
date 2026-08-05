@@ -58,37 +58,40 @@ def load_benchmark(path: str, valid_chunk_ids: set[str] | None = None) -> Benchm
     """加载 benchmark JSON 文件，校验并填充默认值。
 
     Args:
-        path: benchmark JSON 文件路径（数组格式）
-        valid_chunk_ids: 当前索引中实际存在的 chunk_id 集合，传入则校验 expected_chunk_ids 有效性
+        path: benchmark JSON 文件路径（数组格式）。
+        valid_chunk_ids: 当前索引中实际存在的 chunk_id 集合，传入则校验 expected_chunk_ids 有效性。
+
+    Returns:
+        BenchmarkLoadResult：有效条目 + 缺失字段索引 + 无效 chunk_id 索引。
     """
-    raw = _load_json(path)
+    raw_items = _load_json(path)
     result = BenchmarkLoadResult()
 
-    for idx, item in enumerate(raw):
+    for index, item in enumerate(raw_items):
         has_query_id = "query_id" in item
         has_relevance = "relevance" in item
         has_category = "category" in item
         has_difficulty = "difficulty" in item
 
         if not has_query_id:
-            result.missing_query_id.append(idx)
+            result.missing_query_id.append(index)
         if not has_relevance:
-            result.missing_relevance.append(idx)
+            result.missing_relevance.append(index)
         if not has_category:
-            result.missing_category.append(idx)
+            result.missing_category.append(index)
         if not has_difficulty:
-            result.missing_difficulty.append(idx)
+            result.missing_difficulty.append(index)
 
-        query_id = item.get("query_id") or _auto_query_id(idx)
+        query_id = item.get("query_id") or _auto_query_id(index)
         expected_parent_ids = item.get("expected_parent_ids") or item.get("expected_chunk_ids", [])
-        relevance = item.get("relevance") or {cid: 3 for cid in expected_parent_ids}
+        relevance = item.get("relevance") or {chunk_id: 3 for chunk_id in expected_parent_ids}
         reference_facts = item.get("reference_facts") or item.get("ground_truth", "")
 
         # 校验 parent chunk_id 存在性
         if valid_chunk_ids is not None:
-            missing = [cid for cid in expected_parent_ids if cid not in valid_chunk_ids]
+            missing = [chunk_id for chunk_id in expected_parent_ids if chunk_id not in valid_chunk_ids]
             if missing:
-                result.invalid_chunk_ids[idx] = missing
+                result.invalid_chunk_ids[index] = missing
 
         result.valid_items.append(BenchmarkItem(
             query_id=query_id,
@@ -112,12 +115,22 @@ def _auto_query_id(index: int) -> str:
     return f"Q{index + 1:04d}"
 
 
-def _load_json(path: str):
-    """加载 JSON 文件，相对路径基于项目根目录解析。"""
-    p = Path(path)
-    if not p.is_absolute():
-        p = _PROJECT_ROOT / p
-    if not p.exists():
+def _load_json(path: str) -> list:
+    """加载 JSON 文件，相对路径基于项目根目录解析。
+
+    Args:
+        path: benchmark 文件路径（相对路径基于项目根目录）。
+
+    Returns:
+        list：JSON 数组内容。
+
+    Raises:
+        FileNotFoundError: 文件不存在。
+    """
+    path_obj = Path(path)
+    if not path_obj.is_absolute():
+        path_obj = _PROJECT_ROOT / path_obj
+    if not path_obj.exists():
         raise FileNotFoundError(f"Benchmark 文件不存在: {path}")
-    with open(p, "r", encoding="utf-8") as f:
-        return json.load(f)
+    with open(path_obj, "r", encoding="utf-8") as file_handle:
+        return json.load(file_handle)
