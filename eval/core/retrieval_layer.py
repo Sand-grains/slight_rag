@@ -48,6 +48,9 @@ class RetrievalEvalResult:
     final_chunk_ids: list[str] = field(default_factory=list)
     candidate_chunk_ids: list[str] = field(default_factory=list)
     retrieved_files: list[str] = field(default_factory=list)
+    child_hit_at_k: int = 0        # dense 子块候选是否命中任一证据子块
+    child_recall_at_k: float = 0.0  # 证据子块中被 dense 候选命中的比例
+    child_annotated: bool = False   # 该 query 是否标注了 expected_child_ids
     query_rewritten: str = ""
     query_rewritten_flag: str = "原"  # "原" 或 "rewritten"
     final_context_text: str = ""
@@ -89,13 +92,16 @@ def _first_pass(retriever: Retriever, items: list[BenchmarkItem]) -> list[Retrie
     results = []
     for item in items:
         # 用 top_k * 2 做候选检索，前 TOP_K 为 final，剩余为 candidate-only
-        all_chunks = retriever.retrieve(item.query, top_k=CANDIDATE_K)
-        final_chunks = all_chunks[:TOP_K]
-        candidate_only = all_chunks[TOP_K:]
+        all_parents, dense_children = retriever.retrieve_with_dense_child(item.query, top_k=CANDIDATE_K)
+        final_chunks = all_parents[:TOP_K]
+        candidate_only = all_parents[TOP_K:]
 
-        relevant_ids = set(item.expected_chunk_ids)
+        relevant_ids = set(item.expected_parent_ids)
         retrieved_ids = [c.chunk_id for c in final_chunks]
-        candidate_ids = [c.chunk_id for c in all_chunks]
+        candidate_ids = [c.chunk_id for c in all_parents]
+        dense_child_ids = [c.chunk_id for c in dense_children]
+        expected_child_ids = set(item.expected_child_ids)
+        child_annotated = bool(expected_child_ids)
         retrieved_files = list({c.origin_metadata.title + c.origin_metadata.doc_type for c in final_chunks})
 
         has_intersection = any(rid in relevant_ids for rid in retrieved_ids)
@@ -129,6 +135,9 @@ def _first_pass(retriever: Retriever, items: list[BenchmarkItem]) -> list[Retrie
             final_chunk_ids=retrieved_ids,
             candidate_chunk_ids=candidate_ids,
             retrieved_files=retrieved_files,
+            child_hit_at_k=hit_at_k(dense_child_ids, expected_child_ids, len(dense_child_ids)),
+            child_recall_at_k=recall_at_k(dense_child_ids, expected_child_ids, len(dense_child_ids)),
+            child_annotated=child_annotated,
             query_rewritten=item.query,
             query_rewritten_flag="原",
             final_context_text=_build_context(final_chunks),
@@ -137,7 +146,7 @@ def _first_pass(retriever: Retriever, items: list[BenchmarkItem]) -> list[Retrie
 
 
 def _second_pass_low_precision(results: list[RetrievalEvalResult]) -> list[RetrievalEvalResult]:
-    """第二轮：按 category 分组计算噪声比基线，标记 low_precision。"""
+    """第二轮：按 category 分组计算噪声并比较基线，标记 low_precision。"""
     # 按 category 分组收集噪声比（1 - precision）
     by_cat: dict[str, list[float]] = {}
     for r in results:
@@ -174,8 +183,17 @@ def _aggregate(results: list[RetrievalEvalResult]) -> dict:
         "mrr": statistics.mean(r.mrr for r in results),
         "map_at_k": statistics.mean(r.map_at_k for r in results),
         "ndcg_at_k": statistics.mean(r.ndcg_at_k for r in results),
+        "num_child_annotated": sum(1 for r in results if r.child_annotated),
+        "child_hit_at_k": _mean_child(results, "child_hit_at_k"),
+        "child_recall_at_k": _mean_child(results, "child_recall_at_k"),
         "diagnosis_distribution": _diagnosis_distribution(results),
     }
+
+
+def _mean_child(results: list[RetrievalEvalResult], attr: str) -> float:
+    """child 层指标均值：仅对标注了 expected_child_ids 的 query 求均值，其余不参与。"""
+    vals = [getattr(r, attr) for r in results if r.child_annotated]
+    return statistics.mean(vals) if vals else 0.0
 
 
 def _group_by(results: list[RetrievalEvalResult], key) -> dict[str, dict]:
