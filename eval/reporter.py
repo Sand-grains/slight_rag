@@ -90,6 +90,9 @@ def _serialize_result(r: RetrievalEvalResult) -> dict:
         "mrr": r.mrr,
         "map_at_k": r.map_at_k,
         "ndcg_at_k": r.ndcg_at_k,
+        "child_hit_at_k": r.child_hit_at_k,
+        "child_recall_at_k": r.child_recall_at_k,
+        "child_annotated": r.child_annotated,
         "diagnosis": r.diagnosis,
         "final_chunk_ids": r.final_chunk_ids,
         "candidate_chunk_ids": r.candidate_chunk_ids,
@@ -143,6 +146,10 @@ def _build_history(results_dir: str, output: LayerOutput, run_info: dict,
         "map_at_k": round(agg.get("map_at_k", 0.0), 4),
         "ndcg_at_k": round(agg.get("ndcg_at_k", 0.0), 4),
     }
+    if agg.get("num_child_annotated", 0) > 0:
+        line["child_hit_at_k"] = round(agg.get("child_hit_at_k", 0.0), 4)
+        line["child_recall_at_k"] = round(agg.get("child_recall_at_k", 0.0), 4)
+        line["num_child_annotated"] = agg.get("num_child_annotated", 0)
     if judge_results is not None:
         l2 = _build_layer2_summary(judge_results)
         line["faithfulness_avg"] = l2.get("faithfulness_avg")
