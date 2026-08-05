@@ -33,7 +33,7 @@ cuda = ["torch", "torchvision"]
 cpu = ["torch", "torchvision"]
 
 [tool.setuptools.packages.find]
-include = ["indexing*", "retrieval*", "agent*"]
+include = ["indexing*", "retrieval*", "agent*", "preprocess*"]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }
