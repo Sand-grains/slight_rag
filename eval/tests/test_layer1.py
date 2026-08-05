@@ -6,7 +6,7 @@
 from eval.core.benchmark import load_benchmark
 from eval.core.retrieval_layer import run_retrieval_eval
 from eval.reporter import generate_report, build_run_info
-from retrieval.store import IndexStore
+from indexing.index_store import IndexStore
 from retrieval.retriever import Retriever
 import os
 from datetime import datetime
@@ -14,13 +14,13 @@ from datetime import datetime
 store = IndexStore.vector_restore("D:/Pycharm/slight_rag/.vector_cache/")
 retriever = Retriever(store)
 
-result = load_benchmark("D:/Pycharm/slight_rag/benchmark/private.json", valid_chunk_ids=store.chunk_ids)
+result = load_benchmark("/benchmark/private_v5.json", valid_chunk_ids=store.chunk_ids)
 print(f"Items: {len(result.valid_items)}")
 
 output = run_retrieval_eval(retriever, result.valid_items)
 
 ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
 results_dir = os.path.join("D:/Pycharm/slight_rag/eval/results", ts)
-run_info = build_run_info("benchmark/private.json")
+run_info = build_run_info("benchmark/private_v5.json")
 generate_report(output, results_dir, run_info)
 print(f"Report: {results_dir}")

@@ -5,19 +5,19 @@
 
 from eval.core.benchmark import load_benchmark
 from eval.core.llm_as_judge import run_judge
-from retrieval.store import IndexStore
+from indexing.index_store import IndexStore
 from retrieval.retriever import Retriever
 from retrieval.generator import Generator
 from config import TOP_K, LLM_MODEL_ID
 
 store = IndexStore.vector_restore("D:/Pycharm/slight_rag/.vector_cache/")
 retriever = Retriever(store)
-result = load_benchmark("D:/Pycharm/slight_rag/benchmark/private.json", valid_chunk_ids=store.chunk_ids)
+result = load_benchmark("/benchmark/private_v5.json", valid_chunk_ids=store.chunk_ids)
 
 item = result.valid_items[0]
 print(f"Q: {item.query}")
 print(f"reference_facts: {item.reference_facts[:120]}...")
-print(f"expected_chunks: {item.expected_chunk_ids}")
+print(f"expected_parents: {item.expected_parent_ids}")
 print(f"relevance: {item.relevance}")
 print(f"category: {item.category}, difficulty: {item.difficulty}")
 
