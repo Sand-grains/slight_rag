@@ -12,7 +12,7 @@
 
 用法示例::
 
-    from eval.core.monitor_panel import MonitorPanel, set_panel
+    from eval.monitor.monitor_panel import MonitorPanel, set_panel
     panel = MonitorPanel(metrics, previous_per_query)
     set_panel(panel)
     panel.set_total(len(items))
@@ -27,12 +27,17 @@
     - get_panel: 模块级单例获取
     - set_panel: 模块级单例设置
 """
+from __future__ import annotations
 
 import sys
 import threading
 import time
 from collections import deque
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from eval.monitor.monitor_metrics import MonitorMetrics
 
 # Windows: 显式开启 ANSI 转义码支持（Python 默认不会设置此标志）
 if sys.platform == "win32":
@@ -76,7 +81,7 @@ CURSOR_SHOW = "\033[?25h"
 class MonitorPanel:
     """后台 daemon 线程终端面板。持有 MonitorMetrics 引用 + 上次运行基线。"""
 
-    def __init__(self, metrics: "MonitorMetrics", previous_per_query: dict | None = None):
+    def __init__(self, metrics: MonitorMetrics, previous_per_query: dict | None = None):
         self.metrics = metrics
         self.previous_per_query = previous_per_query  # query_id -> per_query dict
 
@@ -110,17 +115,17 @@ class MonitorPanel:
         except Exception:
             return False
 
-    def set_total(self, total: int):
+    def set_total(self, total: int) -> None:
         self.total_queries = total
 
     def set_meta(self, benchmark_name: str, generator_model: str = "", judge_model: str = "",
-                 eval_mode: str = "full"):
+                 eval_mode: str = "full") -> None:
         self._benchmark_name = benchmark_name
         self._generator_model = generator_model
         self._judge_model = judge_model
         self._eval_mode = eval_mode
 
-    def start(self):
+    def start(self) -> None:
         if self._running:
             return
         self._running = True
@@ -128,7 +133,7 @@ class MonitorPanel:
         self._thread = threading.Thread(target=self._render_loop, daemon=True)
         self._thread.start()
 
-    def stop(self):
+    def stop(self) -> None:
         """幂等停止。第二次调用直接返回。"""
         if not self._running:
             return
@@ -137,33 +142,31 @@ class MonitorPanel:
             self._thread.join(timeout=2)
         self._terminal_reset()
 
-    def query_done(self):
+    def query_done(self) -> None:
         with self._lock:
             self.query_count += 1
 
-    def alert(self, query_id: str, message: str):
+    def alert(self, query_id: str, message: str) -> None:
         """入队一条警告事件。无锁——deque.appendleft 在 CPython GIL 下原子。"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         self._alerts.appendleft(f"{timestamp}  {query_id}  {message}")
 
-    # ============================================================
-    # Internal: render loop
-    # ============================================================
+    # ---- 渲染循环 ----
 
-    def _render_loop(self):
+    def _render_loop(self) -> None:
         try:
             while self._running:
                 with self._lock:
-                    l1 = self.metrics.layer1_means()
-                    l2 = self.metrics.layer2_means()
+                    layer1 = self.metrics.layer1_means()
+                    layer2 = self.metrics.layer2_means()
                     stages = self.metrics.stage_percentiles()
                     verdicts = self.metrics.verdict_distribution()
                     deltas = self._compute_deltas(self.metrics)
-                    qc = self.query_count
+                    query_count = self.query_count
                     alerts = list(self._alerts)[:ALERT_DISPLAY_N]
                     alert_total = len(self._alerts)
                     overflow = max(0, alert_total - ALERT_QUEUE_MAXLEN)
-                self._render(l1, l2, stages, verdicts, deltas, qc, alerts, overflow)
+                self._render(layer1, layer2, stages, verdicts, deltas, query_count, alerts, overflow)
                 time.sleep(DEFAULT_REFRESH_SEC)
         except Exception:
             self._crashed = True
@@ -171,18 +174,16 @@ class MonitorPanel:
             import traceback
             traceback.print_exc()
 
-    def _render(self, l1, l2, stages, verdicts, deltas, qc, alerts, overflow):
+    def _render(self, layer1, layer2, stages, verdicts, deltas, query_count, alerts, overflow) -> None:
         if self._mode == "plain":
-            self._render_plain(l1, l2, stages, verdicts, deltas, qc, alerts, overflow)
+            self._render_plain(layer1, layer2, stages, verdicts, deltas, query_count, alerts, overflow)
         else:
-            self._render_ansi(l1, l2, stages, verdicts, deltas, qc, alerts, overflow)
+            self._render_ansi(layer1, layer2, stages, verdicts, deltas, query_count, alerts, overflow)
 
-    # ============================================================
-    # ANSI mode
-    # ============================================================
+    # ---- ANSI 模式 ----
 
-    def _render_ansi(self, l1, l2, stages, verdicts, deltas, qc, alerts, overflow):
-        lines = self._build_panel_lines(l1, l2, stages, verdicts, deltas, qc, alerts, overflow)
+    def _render_ansi(self, layer1, layer2, stages, verdicts, deltas, query_count, alerts, overflow) -> None:
+        lines = self._build_panel_lines(layer1, layer2, stages, verdicts, deltas, query_count, alerts, overflow)
 
         if self._first_render:
             sys.stdout.write(CURSOR_HIDE)
@@ -192,21 +193,17 @@ class MonitorPanel:
         sys.stdout.write(CLEAR_SCREEN + "\n".join(lines) + "\n")
         sys.stdout.flush()
 
-    # ============================================================
-    # Plain mode
-    # ============================================================
+    # ---- plain 模式 ----
 
-    def _render_plain(self, l1, l2, stages, verdicts, deltas, qc, alerts, overflow):
+    def _render_plain(self, layer1, layer2, stages, verdicts, deltas, query_count, alerts, overflow) -> None:
         lines = ["\n" + "=" * 76]
-        lines.extend(self._build_panel_lines(l1, l2, stages, verdicts, deltas, qc, alerts, overflow))
+        lines.extend(self._build_panel_lines(layer1, layer2, stages, verdicts, deltas, query_count, alerts, overflow))
         sys.stdout.write("\n".join(lines) + "\n")
         sys.stdout.flush()
 
-    # ============================================================
-    # Panel content builder
-    # ============================================================
+    # ---- 面板内容构建 ----
 
-    def _build_panel_lines(self, l1, l2, stages, verdicts, deltas, qc, alerts, overflow):
+    def _build_panel_lines(self, layer1, layer2, stages, verdicts, deltas, query_count, alerts, overflow) -> list[str]:
         lines = []
 
         # Header
@@ -220,7 +217,7 @@ class MonitorPanel:
 
         # Progress
         elapsed = time.time() - self.start_time
-        done = min(qc, self.total_queries)
+        done = min(query_count, self.total_queries)
         ratio = done / self.total_queries if self.total_queries > 0 else 0
         filled = int(ratio * PROGRESS_BAR_WIDTH)
         bar = "█" * filled + "░" * (PROGRESS_BAR_WIDTH - filled)
@@ -228,7 +225,7 @@ class MonitorPanel:
         lines.append("")
 
         # Layer 1 + Layer 2 side by side
-        valid_l2_count = len([r for r in list(self.metrics.layer2_results) if r.faithfulness is not None])
+        valid_l2_count = len([result for result in list(self.metrics.layer2_results) if result.faithfulness is not None])
         delta_label = ""
         if deltas and "_matching" in deltas:
             delta_label = f"Δ (N={deltas['_matching']} matching)"
@@ -238,28 +235,27 @@ class MonitorPanel:
         lines.append("  ────────────                            ────────────")
         lines.append("           本次      vs 上次                        本次      vs 上次")
 
-        l1_names = ["Recall@5", "Prec@5", "Hit@5", "MRR", "MAP@5", "NDCG@5"]
-        l1_keys = ["recall_at_k", "precision_at_k", "hit_at_k", "mrr", "map_at_k", "ndcg_at_k"]
-        l2_names = ["Faithfulness", "Answer Relev", "Context Prec", "Context Rec", "Answer Corr"]
-        l2_keys = ["faithfulness", "answer_relevancy", "context_precision", "context_recall", "answer_correctness"]
+        layer1_names = ["Recall@5", "Prec@5", "Hit@5", "MRR", "MAP@5", "NDCG@5"]
+        layer1_keys = ["recall_at_k", "precision_at_k", "hit_at_k", "mrr", "map_at_k", "ndcg_at_k"]
+        layer2_names = ["Faithfulness", "Answer Relev", "Context Prec", "Context Rec", "Answer Corr"]
+        layer2_keys = ["faithfulness", "answer_relevancy", "context_precision", "context_recall", "answer_correctness"]
 
-        for i in range(6):
-            l1_val = self._fmt_val(l1.get(l1_keys[i]))
-            l1_delta = self._fmt_delta(deltas.get(l1_keys[i]))
-            left = f"  {l1_names[i]:<10s}  {l1_val:>8s}  {l1_delta:>8s}"
+        for index in range(6):
+            layer1_value = self._fmt_val(layer1.get(layer1_keys[index]))
+            layer1_delta = self._fmt_delta(deltas.get(layer1_keys[index]))
+            left = f"  {layer1_names[index]:<10s}  {layer1_value:>8s}  {layer1_delta:>8s}"
 
             right = ""
-            if i < 5 and l2:
-                l2_val = self._fmt_val(l2.get(l2_keys[i]))
-                l2_delta = self._fmt_delta(deltas.get(l2_keys[i]))
-                right = f"  {l2_names[i]:<14s}  {l2_val:>8s}  {l2_delta:>8s}"
-            elif i == 5 and l2:
+            if index < 5 and layer2:
+                layer2_value = self._fmt_val(layer2.get(layer2_keys[index]))
+                layer2_delta = self._fmt_delta(deltas.get(layer2_keys[index]))
+                right = f"  {layer2_names[index]:<14s}  {layer2_value:>8s}  {layer2_delta:>8s}"
+            elif index == 5 and layer2:
                 # Verdict line
-                v = verdicts
-                right = (f"  {C_GREEN}pass:{v.get('pass', 0)}{C_RESET}"
-                         f"  {C_YELLOW}partial:{v.get('partial', 0)}{C_RESET}"
-                         f"  {C_RED}fail:{v.get('fail', 0)}{C_RESET}"
-                         f"  error:{v.get('error', 0)}")
+                right = (f"  {C_GREEN}pass:{verdicts.get('pass', 0)}{C_RESET}"
+                         f"  {C_YELLOW}partial:{verdicts.get('partial', 0)}{C_RESET}"
+                         f"  {C_RED}fail:{verdicts.get('fail', 0)}{C_RESET}"
+                         f"  error:{verdicts.get('error', 0)}")
 
             if right:
                 lines.append(f"{left}    {right}")
@@ -286,17 +282,17 @@ class MonitorPanel:
              f"({self.metrics.judge_cache_hit_rate:.1%})"),
         ]
 
-        for i in range(4):
-            s = stages.get(stage_keys[i], {})
-            stage_data = f"{int(s.get('p50', 0))} / {int(s.get('p75', 0))} / {int(s.get('p95', 0))} ms"
-            left = f"  {stage_labels[i]:<20s}  {stage_data:<24s}"
+        for index in range(4):
+            stage_stats = stages.get(stage_keys[index], {})
+            stage_data = f"{int(stage_stats.get('p50', 0))} / {int(stage_stats.get('p75', 0))} / {int(stage_stats.get('p95', 0))} ms"
+            left = f"  {stage_labels[index]:<20s}  {stage_data:<24s}"
 
             # Cost: only show meaningful values if Redis unavailable
-            if not self._redis_available and i in (2, 3):
+            if not self._redis_available and index in (2, 3):
                 cost_str = "—"
             else:
-                cost_str = cost_values[i]
-            right = f"  {cost_labels[i]:<16s}  {cost_str}"
+                cost_str = cost_values[index]
+            right = f"  {cost_labels[index]:<16s}  {cost_str}"
 
             lines.append(f"{left} {right}")
         lines.append("")
@@ -309,38 +305,36 @@ class MonitorPanel:
             lines.append(f"  {C_YELLOW}⚠ 事件 ({alert_total}/{ALERT_QUEUE_MAXLEN}){C_RESET}")
         else:
             lines.append("  ⚠ 事件 (0)")
-        for a in alerts:
-            lines.append(f"  {a}")
+        for alert in alerts:
+            lines.append(f"  {alert}")
 
         lines.append("")
         lines.append(f"{C_BOLD}{'═' * 76}{C_RESET}")
         return lines
 
-    # ============================================================
-    # Final report
-    # ============================================================
+    # ---- 最终报告 ----
 
-    def final_report(self):
+    def final_report(self) -> None:
         """跑完后打印最终报告。从 metrics 读取全部数据。"""
         try:
-            m = self.metrics
-            l1 = m.layer1_means()
-            l2 = m.layer2_means()
-            stages = m.stage_percentiles()
-            verdicts = m.verdict_distribution()
-            deltas = self._compute_deltas(m)
+            metrics = self.metrics
+            layer1 = metrics.layer1_means()
+            layer2 = metrics.layer2_means()
+            stages = metrics.stage_percentiles()
+            verdicts = metrics.verdict_distribution()
+            deltas = self._compute_deltas(metrics)
             elapsed = time.time() - self.start_time if self.start_time > 0 else 0
             run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
 
-            valid = [r for r in list(m.layer2_results) if r.faithfulness is not None]
+            valid = [result for result in list(metrics.layer2_results) if result.faithfulness is not None]
             valid_n = len(valid)
-            total_n = len(list(m.layer2_results))
+            total_n = len(list(metrics.layer2_results))
 
             # Diagnosis distribution from layer1 results
             diag_counts: dict[str, int] = {}
-            for r in list(m.layer1_results):
-                d = getattr(r, "diagnosis", "unknown")
-                diag_counts[d] = diag_counts.get(d, 0) + 1
+            for result in list(metrics.layer1_results):
+                diagnosis = getattr(result, "diagnosis", "unknown")
+                diag_counts[diagnosis] = diag_counts.get(diagnosis, 0) + 1
 
             print()
             print(f"{'═' * 76}")
@@ -352,13 +346,13 @@ class MonitorPanel:
             for name, key in [("Recall@5", "recall_at_k"), ("Precision@5", "precision_at_k"),
                               ("Hit@5", "hit_at_k"), ("MRR", "mrr"),
                               ("MAP@5", "map_at_k"), ("NDCG@5", "ndcg_at_k")]:
-                val = self._fmt_val(l1.get(key))
+                value = self._fmt_val(layer1.get(key))
                 delta = self._fmt_delta(deltas.get(key))
-                print(f"  {name:<14s}  {val:>8s}                             {delta:>8s}")
+                print(f"  {name:<14s}  {value:>8s}                             {delta:>8s}")
 
             print()
             if diag_counts:
-                diag_parts = "   ".join(f"{k}: {v}" for k, v in sorted(diag_counts.items()))
+                diag_parts = "   ".join(f"{key}: {value}" for key, value in sorted(diag_counts.items()))
                 print(f"  诊断分布:  {diag_parts}")
 
             print()
@@ -368,16 +362,15 @@ class MonitorPanel:
             for name, key in [("Faithfulness", "faithfulness"), ("Answer Relev", "answer_relevancy"),
                               ("Context Prec", "context_precision"), ("Context Rec", "context_recall"),
                               ("Answer Corr", "answer_correctness")]:
-                val = self._fmt_val(l2.get(key))
+                value = self._fmt_val(layer2.get(key))
                 delta = self._fmt_delta(deltas.get(key))
-                print(f"  {name:<14s}  {val:>8s}                             {delta:>8s}")
+                print(f"  {name:<14s}  {value:>8s}                             {delta:>8s}")
             if delta_label:
                 print(f"  {' ' * 50}{delta_label}")
 
             print()
-            v = verdicts
-            print(f"  Verdict:  pass: {v.get('pass', 0)}   partial: {v.get('partial', 0)}"
-                  f"   fail: {v.get('fail', 0)}   error: {v.get('error', 0)}")
+            print(f"  Verdict:  pass: {verdicts.get('pass', 0)}   partial: {verdicts.get('partial', 0)}"
+                  f"   fail: {verdicts.get('fail', 0)}   error: {verdicts.get('error', 0)}")
 
             print()
             print("  阶段延迟 (ms)           P50     P75     P95")
@@ -385,43 +378,43 @@ class MonitorPanel:
             for label, key in [("Retrieve", "retrieve"), ("Generate", "generate"),
                                ("Judge Faithfulness", "judge_faithfulness"),
                                ("Judge Quality", "judge_quality")]:
-                s = stages.get(key, {})
-                p50 = int(s.get("p50", 0))
-                p75 = int(s.get("p75", 0))
-                p95 = int(s.get("p95", 0))
+                stage_stats = stages.get(key, {})
+                p50 = int(stage_stats.get("p50", 0))
+                p75 = int(stage_stats.get("p75", 0))
+                p95 = int(stage_stats.get("p95", 0))
                 print(f"  {label:<20s}  {p50:>6d}  {p75:>6d}  {p95:>6d}")
 
-            e2e = stages.get("end_to_end", {})
-            print(f"  {'End-to-end':<20s}  {int(e2e.get('p50', 0)):>6d}  {int(e2e.get('p75', 0)):>6d}  {int(e2e.get('p95', 0)):>6d}")
+            end_to_end = stages.get("end_to_end", {})
+            print(f"  {'End-to-end':<20s}  {int(end_to_end.get('p50', 0)):>6d}  {int(end_to_end.get('p75', 0)):>6d}  {int(end_to_end.get('p95', 0)):>6d}")
 
             print()
             print("  LLM 调用统计")
             print("  ────────────")
-            print(f"  Generator: {m.generator_llm_calls} 次  |  "
-                  f"Judge Faithfulness: {m.judge_faithfulness_calls} 次  |  "
-                  f"Judge Quality: {m.judge_quality_calls} 次")
-            print(f"  Token: {m.total_input_tokens:,} in / {m.total_output_tokens:,} out")
-            print(f"  Input P50/P95:  {int(m._p95([m.total_input_tokens // max(1, m.total_llm_calls)])) if m.total_llm_calls > 0 else 0}"
-                  f" / {int(m.input_tokens_p95)} tok  |  "
-                  f"Output P50/P95: {int(m._p95([m.total_output_tokens // max(1, m.total_llm_calls)])) if m.total_llm_calls > 0 else 0}"
-                  f" / {int(m.output_tokens_p95)} tok")
-            print(f"  重试: {m.retry_count} 次  |  解析失败: {m.parse_error_count} 次")
+            print(f"  Generator: {metrics.generator_llm_calls} 次  |  "
+                  f"Judge Faithfulness: {metrics.judge_faithfulness_calls} 次  |  "
+                  f"Judge Quality: {metrics.judge_quality_calls} 次")
+            print(f"  Token: {metrics.total_input_tokens:,} in / {metrics.total_output_tokens:,} out")
+            print(f"  Input P50/P95:  {int(metrics._p95([metrics.total_input_tokens // max(1, metrics.total_llm_calls)])) if metrics.total_llm_calls > 0 else 0}"
+                  f" / {int(metrics.input_tokens_p95)} tok  |  "
+                  f"Output P50/P95: {int(metrics._p95([metrics.total_output_tokens // max(1, metrics.total_llm_calls)])) if metrics.total_llm_calls > 0 else 0}"
+                  f" / {int(metrics.output_tokens_p95)} tok")
+            print(f"  重试: {metrics.retry_count} 次  |  解析失败: {metrics.parse_error_count} 次")
 
             print()
             print("  缓存 / 成本")
             print("  ────────────")
-            gen_rate = f"{m.generator_cache_hits} hit / {m.generator_cache_misses} miss ({m.generator_cache_hit_rate:.1%})"
-            judge_rate = f"{m.judge_cache_hits} hit / {m.judge_cache_misses} miss ({m.judge_cache_hit_rate:.1%})"
-            print(f"  Generator 缓存: {gen_rate}")
+            generator_rate = f"{metrics.generator_cache_hits} hit / {metrics.generator_cache_misses} miss ({metrics.generator_cache_hit_rate:.1%})"
+            judge_rate = f"{metrics.judge_cache_hits} hit / {metrics.judge_cache_misses} miss ({metrics.judge_cache_hit_rate:.1%})"
+            print(f"  Generator 缓存: {generator_rate}")
             print(f"  Judge 缓存:     {judge_rate}")
-            print(f"  估算成本:       ¥{m.estimated_cost:.2f}")
+            print(f"  估算成本:       ¥{metrics.estimated_cost:.2f}")
 
             print()
             print("  错误明细")
             print("  ────────────")
-            if m.error_types:
-                for err_type, count in sorted(m.error_types.items(), key=lambda x: -x[1]):
-                    print(f"  {err_type}: {count}")
+            if metrics.error_types:
+                for error_type, count in sorted(metrics.error_types.items(), key=lambda item: -item[1]):
+                    print(f"  {error_type}: {count}")
             else:
                 print("  (无错误)")
 
@@ -430,57 +423,60 @@ class MonitorPanel:
         except Exception:
             print("\n(最终报告生成失败)")
 
-    # ============================================================
-    # Helpers
-    # ============================================================
+    # ---- 辅助方法 ----
 
-    def _compute_deltas(self, metrics: "MonitorMetrics") -> dict:
-        """对已完成的 query 计算与上次运行的差值均值。"""
+    def _compute_deltas(self, metrics: MonitorMetrics) -> dict:
+        """对已完成的 query 计算与上次运行的差值均值。
+
+        Args:
+            metrics: 本次运行的指标容器。
+
+        Returns:
+            dict：各指标 delta 均值 + "_matching" 匹配 query 数。
+        """
         if not self.previous_per_query:
             return {}
         deltas_accum: dict[str, list[float]] = {}
         matching = 0
-        for r in list(metrics.layer2_results):
-            qid = getattr(r, "query_id", None)
-            if qid not in self.previous_per_query:
+        for result in list(metrics.layer2_results):
+            query_id = getattr(result, "query_id", None)
+            if query_id not in self.previous_per_query:
                 continue
-            prev = self.previous_per_query[qid]
+            previous = self.previous_per_query[query_id]
             matching += 1
             for field in ["faithfulness", "answer_relevancy", "context_precision",
                           "context_recall", "answer_correctness"]:
-                cur_val = getattr(r, field, None)
-                prev_val = prev.get(field)
-                if cur_val is not None and prev_val is not None:
-                    deltas_accum.setdefault(field, []).append(cur_val - prev_val)
+                current_value = getattr(result, field, None)
+                previous_value = previous.get(field)
+                if current_value is not None and previous_value is not None:
+                    deltas_accum.setdefault(field, []).append(current_value - previous_value)
 
-        # Also compute L1 deltas from layer1_results
-        l1_deltas: dict[str, list[float]] = {}
-        l1_prev_count = 0
-        for r in list(metrics.layer1_results):
-            qid = getattr(r, "query_id", None)
-            if not qid or qid not in self.previous_per_query:
+        # 同时从 layer1_results 计算 Layer 1 delta
+        layer1_deltas: dict[str, list[float]] = {}
+        for result in list(metrics.layer1_results):
+            query_id = getattr(result, "query_id", None)
+            if not query_id or query_id not in self.previous_per_query:
                 continue
-            prev = self.previous_per_query[qid]
-            l1_prev_count += 1
+            previous = self.previous_per_query[query_id]
             for field in ["recall_at_k", "precision_at_k", "hit_at_k", "mrr", "map_at_k", "ndcg_at_k"]:
-                cur_val = getattr(r, field, None)
-                prev_val = prev.get(field)
-                if cur_val is not None and prev_val is not None:
-                    l1_deltas.setdefault(field, []).append(cur_val - prev_val)
+                current_value = getattr(result, field, None)
+                previous_value = previous.get(field)
+                if current_value is not None and previous_value is not None:
+                    layer1_deltas.setdefault(field, []).append(current_value - previous_value)
 
         result = {}
-        for f, vals in {**deltas_accum, **l1_deltas}.items():
-            if vals:
-                result[f] = sum(vals) / len(vals)
+        for field, values in {**deltas_accum, **layer1_deltas}.items():
+            if values:
+                result[field] = sum(values) / len(values)
         result["_matching"] = matching
         return result
 
     @staticmethod
     def _format_time(seconds: float) -> str:
-        h = int(seconds // 3600)
-        m = int((seconds % 3600) // 60)
-        s = int(seconds % 60)
-        return f"{h:02d}:{m:02d}:{s:02d}"
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        remaining_seconds = int(seconds % 60)
+        return f"{hours:02d}:{minutes:02d}:{remaining_seconds:02d}"
 
     @staticmethod
     def _fmt_val(value) -> str:
@@ -499,15 +495,13 @@ class MonitorPanel:
             return f"{sign}{abs(value):.4f}"
         return str(value)
 
-    def _terminal_reset(self):
+    def _terminal_reset(self) -> None:
         if self._mode == "ansi":
             sys.stdout.write(C_RESET + CURSOR_SHOW)
             sys.stdout.flush()
 
 
-# ============================================================
-# Module-level singleton
-# ============================================================
+# ---- 模块级单例 ----
 
 _panel: MonitorPanel | None = None
 

@@ -4,6 +4,7 @@
     - 第一轮：计算 6 项 IR 指标 + 诊断分类（accept / recall_miss / file_miss / ranking_miss / low_precision）
     - 第二轮：对 low_precision 样本追加检测（判定是检索问题还是标注问题）
     - CANDIDATE_K = TOP_K * 2，候选池比最终输出大，用于 ranking_miss 检测
+    - 父子双轨: 父块指标 + dense 子块指标（child_hit_at_k / child_recall_at_k，仅对标注了 expected_child_ids 的 query 参与）
     - 聚合输出 LayerOutput（逐 query 结果 + 聚合指标 + 按 category/difficulty 分组）
 
 用法示例::
@@ -71,14 +72,18 @@ CANDIDATE_K = TOP_K * 2
 def run_retrieval_eval(retriever: Retriever, items: list[BenchmarkItem]) -> LayerOutput:
     """执行 Layer 1 检索评估，含两轮 low_precision 判定。
 
+    Args:
+        retriever: 检索器，提供 retrieve_with_dense_child 双路召回。
+        items: benchmark 条目列表。
+
     Returns:
         LayerOutput: 包含逐 query 结果、聚合指标、分组统计。
     """
     results = _first_pass(retriever, items)
     results = _second_pass_low_precision(results)
     aggregate = _aggregate(results)
-    by_category = _group_by(results, key=lambda r: r.category)
-    by_difficulty = _group_by(results, key=lambda r: r.difficulty)
+    by_category = _group_by(results, key=lambda result: result.category)
+    by_difficulty = _group_by(results, key=lambda result: result.difficulty)
     return LayerOutput(
         results=results,
         aggregate=aggregate,
@@ -88,7 +93,15 @@ def run_retrieval_eval(retriever: Retriever, items: list[BenchmarkItem]) -> Laye
 
 
 def _first_pass(retriever: Retriever, items: list[BenchmarkItem]) -> list[RetrievalEvalResult]:
-    """第一轮：计算指标。ranking_miss 通过 candidate 级检索判定。"""
+    """第一轮：计算指标。ranking_miss 通过 candidate 级检索判定。
+
+    Args:
+        retriever: 检索器，提供 retrieve_with_dense_child 双路召回。
+        items: benchmark 条目列表。
+
+    Returns:
+        list[RetrievalEvalResult]：逐 query 的检索评估结果，诊断含 pending（待第二轮判定）。
+    """
     results = []
     for item in items:
         # 用 top_k * 2 做候选检索，前 TOP_K 为 final，剩余为 candidate-only
@@ -97,17 +110,17 @@ def _first_pass(retriever: Retriever, items: list[BenchmarkItem]) -> list[Retrie
         candidate_only = all_parents[TOP_K:]
 
         relevant_ids = set(item.expected_parent_ids)
-        retrieved_ids = [c.chunk_id for c in final_chunks]
-        candidate_ids = [c.chunk_id for c in all_parents]
-        dense_child_ids = [c.chunk_id for c in dense_children]
+        retrieved_ids = [chunk.chunk_id for chunk in final_chunks]
+        candidate_ids = [chunk.chunk_id for chunk in all_parents]
+        dense_child_ids = [chunk.chunk_id for chunk in dense_children]
         expected_child_ids = set(item.expected_child_ids)
         child_annotated = bool(expected_child_ids)
-        retrieved_files = list({c.origin_metadata.title + c.origin_metadata.doc_type for c in final_chunks})
+        retrieved_files = list({chunk.origin_metadata.title + chunk.origin_metadata.doc_type for chunk in final_chunks})
 
-        has_intersection = any(rid in relevant_ids for rid in retrieved_ids)
-        has_candidate_intersection = any(rid in relevant_ids for rid in candidate_ids)
-        expected_files_stems = {_stem(f) for f in item.expected_files}
-        retrieved_files_stems = {_stem(f) for f in retrieved_files}
+        has_intersection = any(retrieved_id in relevant_ids for retrieved_id in retrieved_ids)
+        has_candidate_intersection = any(retrieved_id in relevant_ids for retrieved_id in candidate_ids)
+        expected_files_stems = {_stem(filepath) for filepath in item.expected_files}
+        retrieved_files_stems = {_stem(filepath) for filepath in retrieved_files}
         file_miss_flag = not expected_files_stems & retrieved_files_stems if expected_files_stems else False
 
         if not has_intersection:
@@ -146,74 +159,121 @@ def _first_pass(retriever: Retriever, items: list[BenchmarkItem]) -> list[Retrie
 
 
 def _second_pass_low_precision(results: list[RetrievalEvalResult]) -> list[RetrievalEvalResult]:
-    """第二轮：按 category 分组计算噪声并比较基线，标记 low_precision。"""
+    """第二轮：按 category 分组计算噪声并比较基线，标记 low_precision。
+
+    Args:
+        results: 第一轮的检索评估结果（含 pending 诊断）。
+
+    Returns:
+        list[RetrievalEvalResult]：pending 条目被判定为 accept / low_precision / recall_miss。
+    """
     # 按 category 分组收集噪声比（1 - precision）
-    by_cat: dict[str, list[float]] = {}
-    for r in results:
-        noise_ratio = 1.0 - r.precision_at_k
-        by_cat.setdefault(r.category, []).append(noise_ratio)
+    by_category: dict[str, list[float]] = {}
+    for result in results:
+        noise_ratio = 1.0 - result.precision_at_k
+        by_category.setdefault(result.category, []).append(noise_ratio)
 
     # 计算每组的噪声比中位数作为基线
-    baseline = {cat: statistics.median(vals) if vals else 0.0 for cat, vals in by_cat.items()}
+    baseline = {
+        category: statistics.median(values) if values else 0.0
+        for category, values in by_category.items()
+    }
 
-    for r in results:
-        if r.diagnosis != "pending":
+    for result in results:
+        if result.diagnosis != "pending":
             continue
-        cat_baseline = baseline.get(r.category, 0.0)
-        noise_ratio = 1.0 - r.precision_at_k
-        if cat_baseline > 0 and noise_ratio > cat_baseline * 1.5:
-            r.diagnosis = "low_precision"
-        elif r.hit_at_k:
-            r.diagnosis = "accept"
+        category_baseline = baseline.get(result.category, 0.0)
+        noise_ratio = 1.0 - result.precision_at_k
+        if category_baseline > 0 and noise_ratio > category_baseline * 1.5:
+            result.diagnosis = "low_precision"
+        elif result.hit_at_k:
+            result.diagnosis = "accept"
         else:
-            r.diagnosis = "recall_miss"
+            result.diagnosis = "recall_miss"
 
     return results
 
 
 def _aggregate(results: list[RetrievalEvalResult]) -> dict:
-    """计算全局聚合指标（均值）。"""
+    """计算全局聚合指标（均值）。
+
+    Args:
+        results: 全部 query 的检索评估结果。
+
+    Returns:
+        dict：含 query 数、各 IR 指标均值、child 指标均值、诊断分布。
+    """
     if not results:
         return {}
     return {
         "num_queries": len(results),
-        "recall_at_k": statistics.mean(r.recall_at_k for r in results),
-        "precision_at_k": statistics.mean(r.precision_at_k for r in results),
-        "hit_at_k": statistics.mean(r.hit_at_k for r in results),
-        "mrr": statistics.mean(r.mrr for r in results),
-        "map_at_k": statistics.mean(r.map_at_k for r in results),
-        "ndcg_at_k": statistics.mean(r.ndcg_at_k for r in results),
-        "num_child_annotated": sum(1 for r in results if r.child_annotated),
+        "recall_at_k": statistics.mean(result.recall_at_k for result in results),
+        "precision_at_k": statistics.mean(result.precision_at_k for result in results),
+        "hit_at_k": statistics.mean(result.hit_at_k for result in results),
+        "mrr": statistics.mean(result.mrr for result in results),
+        "map_at_k": statistics.mean(result.map_at_k for result in results),
+        "ndcg_at_k": statistics.mean(result.ndcg_at_k for result in results),
+        "num_child_annotated": sum(1 for result in results if result.child_annotated),
         "child_hit_at_k": _mean_child(results, "child_hit_at_k"),
         "child_recall_at_k": _mean_child(results, "child_recall_at_k"),
         "diagnosis_distribution": _diagnosis_distribution(results),
     }
 
 
-def _mean_child(results: list[RetrievalEvalResult], attr: str) -> float:
-    """child 层指标均值：仅对标注了 expected_child_ids 的 query 求均值，其余不参与。"""
-    vals = [getattr(r, attr) for r in results if r.child_annotated]
-    return statistics.mean(vals) if vals else 0.0
+def _mean_child(results: list[RetrievalEvalResult], attribute: str) -> float:
+    """child 层指标均值：仅对标注了 expected_child_ids 的 query 求均值，其余不参与。
+
+    Args:
+        results: 全部 query 的检索评估结果。
+        attribute: 取值的属性名（child_hit_at_k 或 child_recall_at_k）。
+
+    Returns:
+        float：标注了证据子块的 query 的指标均值；无标注样本时返回 0.0。
+    """
+    values = [getattr(result, attribute) for result in results if result.child_annotated]
+    return statistics.mean(values) if values else 0.0
 
 
 def _group_by(results: list[RetrievalEvalResult], key) -> dict[str, dict]:
-    """按给定 key 函数分组并计算每组聚合指标。"""
+    """按给定 key 函数分组并计算每组聚合指标。
+
+    Args:
+        results: 全部 query 的检索评估结果。
+        key: 取分组键的函数（如 result.category）。
+
+    Returns:
+        dict[str, dict]：分组键 → 该组的聚合指标。
+    """
     groups: dict[str, list[RetrievalEvalResult]] = {}
-    for r in results:
-        groups.setdefault(key(r), []).append(r)
-    return {k: _aggregate(v) for k, v in groups.items()}
+    for result in results:
+        groups.setdefault(key(result), []).append(result)
+    return {category: _aggregate(values) for category, values in groups.items()}
 
 
 def _diagnosis_distribution(results: list[RetrievalEvalResult]) -> dict[str, int]:
-    """统计五种诊断分类的计数。"""
+    """统计五种诊断分类的计数。
+
+    Args:
+        results: 全部 query 的检索评估结果。
+
+    Returns:
+        dict[str, int]：诊断名 → 计数（五种分类齐全，缺失分类计 0）。
+    """
     dist = {"recall_miss": 0, "file_miss": 0, "ranking_miss": 0, "low_precision": 0, "accept": 0}
-    for r in results:
-        if r.diagnosis in dist:
-            dist[r.diagnosis] += 1
+    for result in results:
+        if result.diagnosis in dist:
+            dist[result.diagnosis] += 1
     return dist
 
 
 def _stem(filepath: str) -> str:
-    """提取文件名主干（不含扩展名），用于文件级匹配。"""
+    """提取文件名主干（不含扩展名），用于文件级匹配。
+
+    Args:
+        filepath: 完整文件路径。
+
+    Returns:
+        str：小写文件名主干。
+    """
     import os
     return os.path.splitext(os.path.basename(filepath))[0].lower()

@@ -10,7 +10,7 @@
 
 用法示例::
 
-    from eval.core.monitor_metrics import get_metrics, reset_metrics
+    from eval.monitor.monitor_metrics import get_metrics, reset_metrics
     reset_metrics()
     metrics = get_metrics()
     metrics.record_stage("retrieve", 120.5)
@@ -23,15 +23,22 @@
     - get_metrics: 模块级单例获取
     - reset_metrics: 重置单例（每次评测运行开头调用）
 """
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 
-def _mean_of(values: list) -> Optional[float]:
-    """非 None 值的均值。全为 None 时返回 None。"""
-    present = [v for v in values if v is not None]
+def _mean_of(values: list[float]) -> float | None:
+    """非 None 值的均值。全为 None 时返回 None。
+
+    Args:
+        values: 数值列表（可含 None）。
+
+    Returns:
+        float | None：非 None 值的均值；全 None 时返回 None。
+    """
+    present = [value for value in values if value is not None]
     if not present:
         return None
     return sum(present) / len(present)
@@ -39,68 +46,74 @@ def _mean_of(values: list) -> Optional[float]:
 
 @dataclass
 class MonitorMetrics:
-    # == Token ==
+    # ---- Token ----
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     input_tokens_list: list[int] = field(default_factory=list)
     output_tokens_list: list[int] = field(default_factory=list)
 
-    # == 阶段延迟（per-query 毫秒列表）==
+    # ---- 阶段延迟（per-query 毫秒列表）----
     stage_retrieve_ms: list[float] = field(default_factory=list)
     stage_generate_ms: list[float] = field(default_factory=list)
     stage_judge_faithfulness_ms: list[float] = field(default_factory=list)
     stage_judge_quality_ms: list[float] = field(default_factory=list)
     stage_end_to_end_ms: list[float] = field(default_factory=list)
 
-    # == 缓存（拆分为 Generator / Judge 独立计数）==
+    # ---- 缓存（拆分为 Generator / Judge 独立计数）----
     generator_cache_hits: int = 0
     generator_cache_misses: int = 0
     judge_cache_hits: int = 0
     judge_cache_misses: int = 0
 
-    # == 错误与重试 ==
+    # ---- 错误与重试 ----
     error_count: int = 0
     error_types: dict[str, int] = field(default_factory=dict)
     retry_count: int = 0
     parse_error_count: int = 0
 
-    # == LLM 调用计数（按类型拆分）==
+    # ---- LLM 调用计数（按类型拆分）----
     generator_llm_calls: int = 0
     judge_faithfulness_calls: int = 0
     judge_quality_calls: int = 0
 
-    # == Per-query 原始结果（唯一真源，裸 list 类型避免 import 依赖）==
+    # ---- Per-query 原始结果（唯一真源，裸 list 类型避免 import 依赖）----
     layer1_results: list = field(default_factory=list)   # list[RetrievalEvalResult]
     layer2_results: list = field(default_factory=list)   # list[JudgeResult]
 
-    # == 成本 ==
+    # ---- 成本 ----
     input_price_per_1k: float = 0.0003
     output_price_per_1k: float = 0.0012
 
-    # === 记录方法 ===
-    def record_tokens(self, input_tokens: int, output_tokens: int):
+    # ---- 记录方法 ----
+    def record_tokens(self, input_tokens: int, output_tokens: int) -> None:
+        """记录一次 LLM 调用的 token 消耗。"""
         self.total_input_tokens += input_tokens
         self.total_output_tokens += output_tokens
         self.input_tokens_list.append(input_tokens)
         self.output_tokens_list.append(output_tokens)
 
-    def record_stage(self, stage: str, ms: float):
+    def record_stage(self, stage: str, ms: float) -> None:
+        """记录某阶段耗时（stage 对应 stage_{stage}_ms 字段名）。"""
         getattr(self, f"stage_{stage}_ms").append(ms)
 
-    def record_generator_cache_hit(self):
+    def record_generator_cache_hit(self) -> None:
         self.generator_cache_hits += 1
 
-    def record_generator_cache_miss(self):
+    def record_generator_cache_miss(self) -> None:
         self.generator_cache_misses += 1
 
-    def record_judge_cache_hit(self):
+    def record_judge_cache_hit(self) -> None:
         self.judge_cache_hits += 1
 
-    def record_judge_cache_miss(self):
+    def record_judge_cache_miss(self) -> None:
         self.judge_cache_misses += 1
 
-    def record_llm_call(self, call_type: str):
-        """call_type: 'generator' | 'judge_faithfulness' | 'judge_quality'"""
+    def record_llm_call(self, call_type: str) -> None:
+        """记录一次 LLM 调用。
+
+        Args:
+            call_type: 'generator' | 'judge_faithfulness' | 'judge_quality'。
+        """
         if call_type == "generator":
             self.generator_llm_calls += 1
         elif call_type == "judge_faithfulness":
@@ -108,17 +121,17 @@ class MonitorMetrics:
         elif call_type == "judge_quality":
             self.judge_quality_calls += 1
 
-    def record_retry(self):
+    def record_retry(self) -> None:
         self.retry_count += 1
 
-    def record_parse_error(self):
+    def record_parse_error(self) -> None:
         self.parse_error_count += 1
 
-    def record_error(self, error_type: str):
+    def record_error(self, error_type: str) -> None:
         self.error_count += 1
         self.error_types[error_type] = self.error_types.get(error_type, 0) + 1
 
-    # === 计算属性 ===
+    # ---- 计算属性 ----
     @property
     def total_llm_calls(self) -> int:
         return self.generator_llm_calls + self.judge_faithfulness_calls + self.judge_quality_calls
@@ -144,7 +157,7 @@ class MonitorMetrics:
         return input_cost + output_cost
 
     @staticmethod
-    def _p95(values: list) -> float:
+    def _p95(values: list[float]) -> float:
         if not values:
             return 0.0
         import numpy
@@ -158,39 +171,39 @@ class MonitorMetrics:
     def output_tokens_p95(self) -> float:
         return self._p95(self.output_tokens_list)
 
-    # === 聚合方法（MonitorPanel 面板和 render_final 共用）===
+    # ---- 聚合方法（MonitorPanel 面板和 render_final 共用）----
     def layer1_means(self) -> dict[str, float]:
         results = list(self.layer1_results)
         if not results:
             return {}
-        n = len(results)
+        count = len(results)
         return {
-            "recall_at_k": sum(r.recall_at_k for r in results) / n,
-            "precision_at_k": sum(r.precision_at_k for r in results) / n,
-            "hit_at_k": sum(r.hit_at_k for r in results) / n,
-            "mrr": sum(r.mrr for r in results) / n,
-            "map_at_k": sum(r.map_at_k for r in results) / n,
-            "ndcg_at_k": sum(r.ndcg_at_k for r in results) / n,
+            "recall_at_k": sum(result.recall_at_k for result in results) / count,
+            "precision_at_k": sum(result.precision_at_k for result in results) / count,
+            "hit_at_k": sum(result.hit_at_k for result in results) / count,
+            "mrr": sum(result.mrr for result in results) / count,
+            "map_at_k": sum(result.map_at_k for result in results) / count,
+            "ndcg_at_k": sum(result.ndcg_at_k for result in results) / count,
         }
 
-    def layer2_means(self) -> dict[str, Optional[float]]:
+    def layer2_means(self) -> dict[str, float | None]:
         results = list(self.layer2_results)
-        valid = [r for r in results if r.faithfulness is not None]
-        if not valid:
+        valid_results = [result for result in results if result.faithfulness is not None]
+        if not valid_results:
             return {}
         return {
-            "faithfulness": _mean_of([r.faithfulness for r in valid]),
-            "answer_relevancy": _mean_of([r.answer_relevancy for r in valid]),
-            "context_precision": _mean_of([r.context_precision for r in valid]),
-            "context_recall": _mean_of([r.context_recall for r in valid]),
-            "answer_correctness": _mean_of([r.answer_correctness for r in valid]),
+            "faithfulness": _mean_of([result.faithfulness for result in valid_results]),
+            "answer_relevancy": _mean_of([result.answer_relevancy for result in valid_results]),
+            "context_precision": _mean_of([result.context_precision for result in valid_results]),
+            "context_recall": _mean_of([result.context_recall for result in valid_results]),
+            "answer_correctness": _mean_of([result.answer_correctness for result in valid_results]),
         }
 
     def verdict_distribution(self) -> dict[str, int]:
         counts = {"pass": 0, "partial": 0, "fail": 0, "error": 0}
-        for r in list(self.layer2_results):
-            v = r.verdict if r.verdict in counts else "error"
-            counts[v] += 1
+        for result in list(self.layer2_results):
+            verdict = result.verdict if result.verdict in counts else "error"
+            counts[verdict] += 1
         return counts
 
     def stage_percentiles(self) -> dict[str, dict[str, float]]:
@@ -214,9 +227,9 @@ class MonitorMetrics:
                 }
         return result
 
-    # === 序列化 ===
+    # ---- 序列化 ----
     def summary_dict(self) -> dict:
-        sp = self.stage_percentiles()
+        stage_percentiles_map = self.stage_percentiles()
         return {
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
@@ -232,24 +245,24 @@ class MonitorMetrics:
             "generator_llm_calls": self.generator_llm_calls,
             "judge_faithfulness_calls": self.judge_faithfulness_calls,
             "judge_quality_calls": self.judge_quality_calls,
-            "stage_retrieve_p50": sp.get("retrieve", {}).get("p50", 0.0),
-            "stage_retrieve_p75": sp.get("retrieve", {}).get("p75", 0.0),
-            "stage_retrieve_p95": sp.get("retrieve", {}).get("p95", 0.0),
-            "stage_generate_p50": sp.get("generate", {}).get("p50", 0.0),
-            "stage_generate_p75": sp.get("generate", {}).get("p75", 0.0),
-            "stage_generate_p95": sp.get("generate", {}).get("p95", 0.0),
-            "stage_judge_faithfulness_p50": sp.get("judge_faithfulness", {}).get("p50", 0.0),
-            "stage_judge_faithfulness_p75": sp.get("judge_faithfulness", {}).get("p75", 0.0),
-            "stage_judge_faithfulness_p95": sp.get("judge_faithfulness", {}).get("p95", 0.0),
-            "stage_judge_quality_p50": sp.get("judge_quality", {}).get("p50", 0.0),
-            "stage_judge_quality_p75": sp.get("judge_quality", {}).get("p75", 0.0),
-            "stage_judge_quality_p95": sp.get("judge_quality", {}).get("p95", 0.0),
-            "stage_end_to_end_p50": sp.get("end_to_end", {}).get("p50", 0.0),
-            "stage_end_to_end_p75": sp.get("end_to_end", {}).get("p75", 0.0),
-            "stage_end_to_end_p95": sp.get("end_to_end", {}).get("p95", 0.0),
+            "stage_retrieve_p50": stage_percentiles_map.get("retrieve", {}).get("p50", 0.0),
+            "stage_retrieve_p75": stage_percentiles_map.get("retrieve", {}).get("p75", 0.0),
+            "stage_retrieve_p95": stage_percentiles_map.get("retrieve", {}).get("p95", 0.0),
+            "stage_generate_p50": stage_percentiles_map.get("generate", {}).get("p50", 0.0),
+            "stage_generate_p75": stage_percentiles_map.get("generate", {}).get("p75", 0.0),
+            "stage_generate_p95": stage_percentiles_map.get("generate", {}).get("p95", 0.0),
+            "stage_judge_faithfulness_p50": stage_percentiles_map.get("judge_faithfulness", {}).get("p50", 0.0),
+            "stage_judge_faithfulness_p75": stage_percentiles_map.get("judge_faithfulness", {}).get("p75", 0.0),
+            "stage_judge_faithfulness_p95": stage_percentiles_map.get("judge_faithfulness", {}).get("p95", 0.0),
+            "stage_judge_quality_p50": stage_percentiles_map.get("judge_quality", {}).get("p50", 0.0),
+            "stage_judge_quality_p75": stage_percentiles_map.get("judge_quality", {}).get("p75", 0.0),
+            "stage_judge_quality_p95": stage_percentiles_map.get("judge_quality", {}).get("p95", 0.0),
+            "stage_end_to_end_p50": stage_percentiles_map.get("end_to_end", {}).get("p50", 0.0),
+            "stage_end_to_end_p75": stage_percentiles_map.get("end_to_end", {}).get("p75", 0.0),
+            "stage_end_to_end_p95": stage_percentiles_map.get("end_to_end", {}).get("p95", 0.0),
         }
 
-    def print_summary(self):
+    def print_summary(self) -> None:
         logging.info(
             "cost: $%.6f | Gen cache: %.0f%% | Judge cache: %.0f%% | errors: %d | "
             "retries: %d | parse err: %d | input P95: %d tok | output P95: %d tok",
@@ -279,7 +292,7 @@ def get_metrics() -> MonitorMetrics:
     return _metrics
 
 
-def reset_metrics():
+def reset_metrics() -> None:
     """重置指标（每次 run_full_mode 开头调用）。"""
     global _metrics
     _metrics = None
