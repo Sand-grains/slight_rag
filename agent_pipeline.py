@@ -17,13 +17,12 @@ from pathlib import Path
 from config import LLM_API_KEY, LLM_MODEL_ID, LLM_BASE_URL, STORAGE_BACKEND  # 先加载 .env，确保后续导入的库能读到环境变量
 from hello_agents import HelloAgentsLLM, SimpleAgent, ToolRegistry
 from indexing.loader import load
-from indexing.chunker import chunk
+from indexing.router import Router
+from preprocess import diagnose
 from retrieval.embedding import embed
-from retrieval.store import IndexStore
+from indexing.index_store import IndexStore
 from retrieval.retriever import Retriever
 from agent.tools import RAGSearchTool
-
-# ==================== 离线索引管线（同 v1）====================
 
 data_dir = Path("data")
 docs = []
@@ -37,17 +36,27 @@ if not docs:
 
 print(f"已加载 {len(docs)} 篇文档")
 
-chunks = chunk(docs)
-print(f"切分后共 {len(chunks)} 个 chunk")
-
-texts = [c.content for c in chunks]
-vectors = embed(texts)
-print(f"向量化完成，维度: {len(vectors[0])}")
-
 store = IndexStore()
-store.batch_add(chunks, vectors)
+router = Router()
+total_parents = 0
+total_children = 0
+for doc in docs:
+    diagnosed_doc = diagnose(doc.content)
+    splitter = router.route(diagnosed_doc)
+    base_meta = {"doc_id": doc.doc_id, "doc_meta": doc.origin_metadata}
+    result = splitter.split(doc.content, base_meta)
+    parents, children = result if isinstance(result, tuple) else (result, result)
+    if not parents:
+        print(f" [SKIP] {doc.doc_id}: 空文档，跳过")
+        continue
+    child_vectors = embed([c.content for c in children])
+    store.batch_add(parents, children, child_vectors)
+    total_parents += len(parents)
+    total_children += len(children)
+    print(f"  [OK] {doc.doc_id}: {len(parents)} 父块 / {len(children)} 子块（{type(splitter).__name__}）")
+
 store.vector_persistence()
-print(f"向量入库完成（{STORAGE_BACKEND} 模式）")
+print(f"入库完成（{STORAGE_BACKEND} 模式）：{total_parents} 父块 / {total_children} 子块")
 
 # ==================== Agent 层 ====================
 
@@ -63,7 +72,8 @@ SYSTEM_PROMPT = """
 1.必须**仅依赖**工具返回的【参考文档】进行回答, 不要使用你内部的训练知识
 2.如果检索结果中没有包含回答问题所需的信息, 请直接回答: "知识库中未找到相关信息". **严禁编造**
 3.回答需要简洁, 逻辑清晰, 准确, 有条理, 分点描述
-4.引用来源时标注[来源X], 在回答的末尾注明引用的文档名称"""
+4.引用来源时标注[来源X], 在回答的末尾注明引用的文档名称
+"""
 
 llm = HelloAgentsLLM(
     model=LLM_MODEL_ID,
