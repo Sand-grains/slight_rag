@@ -30,6 +30,7 @@ from eval.core.calculator.metrics import (
 from retrieval.retriever import Retriever
 from retrieval.generator import _build_context
 from config import TOP_K
+from eval.utils import stem
 
 
 @dataclass
@@ -119,8 +120,8 @@ def _first_pass(retriever: Retriever, items: list[BenchmarkItem]) -> list[Retrie
 
         has_intersection = any(retrieved_id in relevant_ids for retrieved_id in retrieved_ids)
         has_candidate_intersection = any(retrieved_id in relevant_ids for retrieved_id in candidate_ids)
-        expected_files_stems = {_stem(filepath) for filepath in item.expected_files}
-        retrieved_files_stems = {_stem(filepath) for filepath in retrieved_files}
+        expected_files_stems = {stem(filepath) for filepath in item.expected_files}
+        retrieved_files_stems = {stem(filepath) for filepath in retrieved_files}
         file_miss_flag = not expected_files_stems & retrieved_files_stems if expected_files_stems else False
 
         if not has_intersection:
@@ -266,14 +267,3 @@ def _diagnosis_distribution(results: list[RetrievalEvalResult]) -> dict[str, int
     return dist
 
 
-def _stem(filepath: str) -> str:
-    """提取文件名主干（不含扩展名），用于文件级匹配。
-
-    Args:
-        filepath: 完整文件路径。
-
-    Returns:
-        str：小写文件名主干。
-    """
-    import os
-    return os.path.splitext(os.path.basename(filepath))[0].lower()

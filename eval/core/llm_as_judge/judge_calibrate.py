@@ -17,7 +17,6 @@
 """
 from __future__ import annotations
 
-import json
 import logging
 import sys
 from datetime import datetime
@@ -25,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from config import TOP_K, LLM_MODEL_ID, _PROJECT_ROOT
 from eval.core.benchmark import load_benchmark
+from eval.utils import write_json
 from eval.core.llm_as_judge.judge import run_judge, _get_client
 from indexing.index_store import IndexStore
 from retrieval.retriever import Retriever
@@ -240,6 +240,5 @@ if __name__ == "__main__":
     out_dir = _PROJECT_ROOT / "eval" / "results" / "calibrate"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{timestamp}.json"
-    with open(path, "w", encoding="utf-8") as file_handle:
-        json.dump(report, file_handle, ensure_ascii=False, indent=2, default=str)
+    write_json(path, report, default=str)
     print(f"\n校准报告已保存: {path}")

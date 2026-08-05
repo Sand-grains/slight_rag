@@ -36,6 +36,8 @@ from collections import deque
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from eval.utils import format_time, p95
+
 if TYPE_CHECKING:
     from eval.monitor.monitor_metrics import MonitorMetrics
 
@@ -221,7 +223,7 @@ class MonitorPanel:
         ratio = done / self.total_queries if self.total_queries > 0 else 0
         filled = int(ratio * PROGRESS_BAR_WIDTH)
         bar = "█" * filled + "░" * (PROGRESS_BAR_WIDTH - filled)
-        lines.append(f"  进度  {bar}  {done}/{self.total_queries} ({ratio:.0%})  [{self._format_time(elapsed)}]")
+        lines.append(f"  进度  {bar}  {done}/{self.total_queries} ({ratio:.0%})  [{format_time(elapsed)}]")
         lines.append("")
 
         # Layer 1 + Layer 2 side by side
@@ -338,7 +340,7 @@ class MonitorPanel:
 
             print()
             print(f"{'═' * 76}")
-            print(f"  Run ID: {run_id}    Mode: {self._eval_mode}    {self.total_queries} queries    耗时: {self._format_time(elapsed)}")
+            print(f"  Run ID: {run_id}    Mode: {self._eval_mode}    {self.total_queries} queries    耗时: {format_time(elapsed)}")
             print(f"{'═' * 76}")
             print()
             print("  Layer 1                                             vs 上次")
@@ -394,9 +396,9 @@ class MonitorPanel:
                   f"Judge Faithfulness: {metrics.judge_faithfulness_calls} 次  |  "
                   f"Judge Quality: {metrics.judge_quality_calls} 次")
             print(f"  Token: {metrics.total_input_tokens:,} in / {metrics.total_output_tokens:,} out")
-            print(f"  Input P50/P95:  {int(metrics._p95([metrics.total_input_tokens // max(1, metrics.total_llm_calls)])) if metrics.total_llm_calls > 0 else 0}"
+            print(f"  Input P50/P95:  {int(p95([metrics.total_input_tokens // max(1, metrics.total_llm_calls)])) if metrics.total_llm_calls > 0 else 0}"
                   f" / {int(metrics.input_tokens_p95)} tok  |  "
-                  f"Output P50/P95: {int(metrics._p95([metrics.total_output_tokens // max(1, metrics.total_llm_calls)])) if metrics.total_llm_calls > 0 else 0}"
+                  f"Output P50/P95: {int(p95([metrics.total_output_tokens // max(1, metrics.total_llm_calls)])) if metrics.total_llm_calls > 0 else 0}"
                   f" / {int(metrics.output_tokens_p95)} tok")
             print(f"  重试: {metrics.retry_count} 次  |  解析失败: {metrics.parse_error_count} 次")
 
@@ -470,13 +472,6 @@ class MonitorPanel:
                 result[field] = sum(values) / len(values)
         result["_matching"] = matching
         return result
-
-    @staticmethod
-    def _format_time(seconds: float) -> str:
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        remaining_seconds = int(seconds % 60)
-        return f"{hours:02d}:{minutes:02d}:{remaining_seconds:02d}"
 
     @staticmethod
     def _fmt_val(value) -> str:

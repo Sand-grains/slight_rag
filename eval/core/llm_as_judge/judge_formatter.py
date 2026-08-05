@@ -25,6 +25,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from eval.utils import fill
+
 if TYPE_CHECKING:
     from indexing.chunk import Chunk
 
@@ -47,22 +49,6 @@ def _load_prompt(filename: str) -> str:
     if not path.exists():
         raise FileNotFoundError(f"Prompt 模板不存在: {path}")
     return path.read_text(encoding="utf-8")
-
-
-def _fill(template: str, **kwargs) -> str:
-    """用简单字符串替换填充模板（避免 .format() 的 brace 转义问题）。
-
-    Args:
-        template: 含 {key} 占位符的模板文本。
-        **kwargs: 占位符名 → 替换值。
-
-    Returns:
-        str：占位符全部替换后的模板。
-    """
-    result = template
-    for key, value in kwargs.items():
-        result = result.replace("{" + key + "}", str(value))
-    return result
 
 
 def build_judge_context(chunks: list[Chunk]) -> str:
@@ -109,7 +95,7 @@ class Formatter:
         Returns:
             str：填充后的 faithfulness prompt。
         """
-        return _fill(
+        return fill(
             self._faithfulness_prompt_template,
             query=query,
             context=context_str,
@@ -130,7 +116,7 @@ class Formatter:
         Returns:
             str：填充后的质量评估 prompt。
         """
-        return _fill(
+        return fill(
             self._quality_prompt_template,
             query=query,
             context=context_str,

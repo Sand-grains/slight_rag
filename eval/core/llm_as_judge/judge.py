@@ -5,7 +5,7 @@
     - judge_quality：评估 answer_relevancy / context_precision / context_recall / answer_correctness 四个质量维度
     - 内层 ThreadPoolExecutor(max_workers=2) 并行提交两个 Judge 调用
     - _judge_with_retry：独立 1-worker 池 + future.result(timeout=deadline) + 指数退避（base_delay * 2^attempt * jitter）
-    - _call_llm：调用后 _extract_json 三层兜底（json.loads → markdown fence → regex brace），解析失败 record_parse_error + alert
+    - _call_llm：调用后 extract_json 三层兜底（json.loads → markdown fence → regex brace），解析失败 record_parse_error + alert
     - execute_verdict 纯函数：有值维度中 ≥ 0.75 的比例 → pass / partial / fail
     - eval 场景 temperature=0（透传），确保 Judge 评分可复现
     - JudgeResult 含 4 个阶段延迟字段，向前兼容旧缓存（新字段默认 None）
@@ -39,7 +39,7 @@ from openai import OpenAI
 
 from config import (LLM_API_KEY, LLM_BASE_URL, EVAL_LLM_MODEL_ID,
                     JUDGE_MAX_RETRY, JUDGE_BASE_DELAY, JUDGE_DEADLINE, EVAL_THREADPOOL_WORKERS)
-from eval.core.calculator.utils import _extract_json, _clamp_score
+from eval.utils import clamp_score, extract_json
 from eval.core.llm_as_judge.judge_formatter import Formatter, build_judge_context, get_formatter
 from eval.core.llm_as_judge.judge_cache import _cache_judge_key, get_judge_cache, set_judge_cache
 from eval.monitor import get_panel
@@ -97,7 +97,7 @@ class JudgeResult:
 def _call_llm(client: OpenAI, model: str, prompt: str,
              temperature: float = 0.0, query_id: str = "",
              call_type: str = "") -> dict:
-    """调用 LLM 并解析 LLM 返回的 JSON 输出（经 _extract_json 三层兜底）。
+    """调用 LLM 并解析 LLM 返回的 JSON 输出（经 extract_json 三层兜底）。
 
     Args:
         client: OpenAI 兼容客户端。
@@ -134,7 +134,7 @@ def _call_llm(client: OpenAI, model: str, prompt: str,
     if text is None:
         return {"error": "LLM returned empty content", "raw": ""}
     try:
-        return _extract_json(text)
+        return extract_json(text)
     except (json.JSONDecodeError, ValueError) as error:
         from eval.monitor import get_metrics
         try:
@@ -250,7 +250,7 @@ def judge_faithfulness(
     score = result.get("faithfulness")
     if score is not None:
         try:
-            score = _clamp_score(float(score))
+            score = clamp_score(float(score))
         except (ValueError, TypeError):
             score = None
     return score, result.get("grounded_claims", []), None
@@ -295,7 +295,7 @@ def judge_quality(
         if value is None:
             return None
         try:
-            return _clamp_score(float(value))
+            return clamp_score(float(value))
         except (ValueError, TypeError):
             return None
 

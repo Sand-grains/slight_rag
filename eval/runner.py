@@ -25,7 +25,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import sys
@@ -36,13 +35,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from config import TOP_K, LLM_MODEL_ID, EVAL_LLM_MODEL_ID, EVAL_THREADPOOL_WORKERS, GENERATOR_TEMPERATURE, STORAGE_BACKEND
+from eval.utils import read_json
 from indexing.index_store import IndexStore
 from retrieval.retriever import Retriever
 from retrieval.generator import Generator
 
 if TYPE_CHECKING:
     from eval.core.benchmark import BenchmarkItem, BenchmarkLoadResult
-    from eval.core.llm_as_judge import JudgeResult
+    from eval.core.llm_as_judge.judge import JudgeResult
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent  # eval/runner.py → eval/ → 项目根
 
@@ -85,10 +85,8 @@ def _load_previous_run() -> dict[str, dict] | None:
     for run_dir in runs:
         per_query_path = run_dir / "per_query.json"
         if per_query_path.exists():
-            try:
-                with open(per_query_path, "r", encoding="utf-8") as file_handle:
-                    data = json.load(file_handle)
-            except Exception:
+            data = read_json(per_query_path)
+            if data is None:
                 continue
             if data and any(
                 "faithfulness" in value for value in data.values()
@@ -96,22 +94,6 @@ def _load_previous_run() -> dict[str, dict] | None:
             ):
                 return data
     return None
-
-
-def _load_summary(results_dir: str) -> dict | None:
-    """读取某次运行的 summary.json。
-
-    Args:
-        results_dir: 运行结果目录（eval/results/timeline/<run_id>）。
-
-    Returns:
-        dict | None：summary 内容；文件不存在时返回 None。
-    """
-    path = os.path.join(results_dir, "summary.json")
-    if not os.path.exists(path):
-        return None
-    with open(path, "r", encoding="utf-8") as file_handle:
-        return json.load(file_handle)
 
 
 # ---- 单条评估 ----
@@ -129,11 +111,11 @@ def _evaluate_one(item: BenchmarkItem, retriever: Retriever, generator: Generato
     Returns:
         JudgeResult：含各阶段耗时与判定结果；异常时 verdict="error"。
     """
-    from eval.core.llm_as_judge import run_judge, JudgeResult
-    from eval.core.judge_formatter import get_formatter, build_judge_context
-    from eval.core.judge_cache import _cache_generator_key
-    from eval.core.monitor_metrics import get_metrics
-    from eval.core.monitor_panel import get_panel
+    from eval.core.llm_as_judge.judge import run_judge, JudgeResult
+    from eval.core.llm_as_judge.judge_formatter import get_formatter, build_judge_context
+    from eval.core.llm_as_judge.judge_cache import _cache_generator_key
+    from eval.monitor import get_metrics
+    from eval.monitor import get_panel
     from infra.cache import get_cache as get_cache_backend
     from infra.config import REDIS_DEFAULT_TTL
 
@@ -217,10 +199,10 @@ def run_retrieval_mode(benchmark_path: str) -> str:
         str：本次运行结果目录（eval/results/timeline/<ts>）。
     """
     from eval.core.benchmark import load_benchmark
-    from eval.core.retrieval_layer import run_retrieval_eval
+    from eval.core.retrieval.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
-    from eval.core.monitor_metrics import get_metrics, reset_metrics
-    from eval.core.monitor_panel import MonitorPanel
+    from eval.monitor import get_metrics, reset_metrics
+    from eval.monitor import MonitorPanel
 
     reset_metrics()
     metrics = get_metrics()
@@ -272,11 +254,11 @@ def run_full_mode(benchmark_path: str) -> str:
         str：本次运行结果目录（eval/results/timeline/<ts>）。
     """
     from eval.core.benchmark import load_benchmark
-    from eval.core.retrieval_layer import run_retrieval_eval
+    from eval.core.retrieval.retrieval_layer import run_retrieval_eval
     from eval.reporter import generate_report, build_run_info
-    from eval.core.llm_as_judge import _get_client
-    from eval.core.monitor_metrics import get_metrics, reset_metrics
-    from eval.core.monitor_panel import MonitorPanel, set_panel
+    from eval.core.llm_as_judge.judge import _get_client
+    from eval.monitor import get_metrics, reset_metrics
+    from eval.monitor import MonitorPanel, set_panel
 
     reset_metrics()
     metrics = get_metrics()
@@ -384,8 +366,8 @@ def run_compare(run_a: str, run_b: str) -> None:
     dir_a = os.path.join(base, run_a)
     dir_b = os.path.join(base, run_b)
 
-    summary_a = _load_summary(dir_a)
-    summary_b = _load_summary(dir_b)
+    summary_a = read_json(os.path.join(dir_a, "summary.json"))
+    summary_b = read_json(os.path.join(dir_b, "summary.json"))
 
     if not summary_a or not summary_b:
         print("错误: 找不到 summary.json")

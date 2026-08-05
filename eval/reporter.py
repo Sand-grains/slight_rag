@@ -19,36 +19,37 @@
     - build_run_info: 构建运行配置快照 dict
 """
 
-import json
 import os
-import subprocess
 from datetime import datetime
-from pathlib import Path
 
-from eval.core.retrieval_layer import LayerOutput, RetrievalEvalResult
+from eval.core.retrieval.retrieval_layer import LayerOutput, RetrievalEvalResult
+from eval.utils import append_jsonl, get_git_commit, write_json
 
 
 def generate_report(output: LayerOutput, results_dir: str, run_info: dict,
                     judge_results: list | None = None,
                     metrics_summary: dict | None = None) -> str:
-    """生成完整 eval 报告：写入 summary.json / per_query.json / failures.json / run_info.json。
+    """生成完整 eval 报告：写入 summary.json / per_query.json / failures.json / run_info.json / history.jsonl。
 
     Args:
-        output: Layer 1 评估完整输出
-        results_dir: 结果输出目录
-        run_info: 运行配置快照
-        judge_results: Layer 2 JudgeResult 列表(可选, full mode 时传入)
-        metrics_summary: MonitorMetrics.summary_dict()(可选, full mode 时传入)
+        output: Layer 1 评估完整输出。
+        results_dir: 结果输出目录。
+        run_info: 运行配置快照。
+        judge_results: Layer 2 JudgeResult 列表（可选，full mode 时传入）。
+        metrics_summary: MonitorMetrics.summary_dict()（可选，full mode 时传入）。
+
+    Returns:
+        str：结果输出目录。
     """
     os.makedirs(results_dir, exist_ok=True)
 
     # per_query.json: query_id → 完整 trace
-    per_query = {r.query_id: _serialize_result(r) for r in output.results}
-    _write_json(os.path.join(results_dir, "per_query.json"), per_query)
+    per_query = {result.query_id: _serialize_result(result) for result in output.results}
+    write_json(os.path.join(results_dir, "per_query.json"), per_query)
 
     # failures.json: diagnosis != "accept" 的子集
-    failures = {r.query_id: _serialize_result(r) for r in output.results if r.diagnosis != "accept"}
-    _write_json(os.path.join(results_dir, "failures.json"), failures)
+    failures = {result.query_id: _serialize_result(result) for result in output.results if result.diagnosis != "accept"}
+    write_json(os.path.join(results_dir, "failures.json"), failures)
 
     # summary.json: 聚合 + 分组 + Layer 2 + cost
     summary = {
@@ -60,17 +61,17 @@ def generate_report(output: LayerOutput, results_dir: str, run_info: dict,
         summary["layer2"] = _build_layer2_summary(judge_results)
     if metrics_summary is not None:
         summary["cost"] = metrics_summary
-    _write_json(os.path.join(results_dir, "summary.json"), summary)
+    write_json(os.path.join(results_dir, "summary.json"), summary)
 
     # run_info.json: 配置快照
-    _write_json(os.path.join(results_dir, "run_info.json"), run_info)
+    write_json(os.path.join(results_dir, "run_info.json"), run_info)
 
     # per_query.json: 合并 Layer 2 数据
     if judge_results is not None:
-        for jr in judge_results:
-            if jr.query_id in per_query:
-                per_query[jr.query_id].update(_serialize_judge_result(jr))
-        _write_json(os.path.join(results_dir, "per_query.json"), per_query)
+        for judge_result in judge_results:
+            if judge_result.query_id in per_query:
+                per_query[judge_result.query_id].update(_serialize_judge_result(judge_result))
+        write_json(os.path.join(results_dir, "per_query.json"), per_query)
 
     # history.jsonl: 追加一行
     _build_history(results_dir, output, run_info, judge_results, metrics_summary)
@@ -78,85 +79,94 @@ def generate_report(output: LayerOutput, results_dir: str, run_info: dict,
     return results_dir
 
 
-def _serialize_result(r: RetrievalEvalResult) -> dict:
+def _serialize_result(result: RetrievalEvalResult) -> dict:
+    """将单条 Layer 1 结果序列化为可写入 JSON 的 dict。"""
     return {
-        "query_id": r.query_id,
-        "query": r.query,
-        "category": r.category,
-        "difficulty": r.difficulty,
-        "recall_at_k": r.recall_at_k,
-        "precision_at_k": r.precision_at_k,
-        "hit_at_k": r.hit_at_k,
-        "mrr": r.mrr,
-        "map_at_k": r.map_at_k,
-        "ndcg_at_k": r.ndcg_at_k,
-        "child_hit_at_k": r.child_hit_at_k,
-        "child_recall_at_k": r.child_recall_at_k,
-        "child_annotated": r.child_annotated,
-        "diagnosis": r.diagnosis,
-        "final_chunk_ids": r.final_chunk_ids,
-        "candidate_chunk_ids": r.candidate_chunk_ids,
-        "retrieved_files": r.retrieved_files,
-        "query_rewritten": r.query_rewritten,
-        "query_rewritten_flag": r.query_rewritten_flag,
-        "final_context_text": r.final_context_text,
+        "query_id": result.query_id,
+        "query": result.query,
+        "category": result.category,
+        "difficulty": result.difficulty,
+        "recall_at_k": result.recall_at_k,
+        "precision_at_k": result.precision_at_k,
+        "hit_at_k": result.hit_at_k,
+        "mrr": result.mrr,
+        "map_at_k": result.map_at_k,
+        "ndcg_at_k": result.ndcg_at_k,
+        "child_hit_at_k": result.child_hit_at_k,
+        "child_recall_at_k": result.child_recall_at_k,
+        "child_annotated": result.child_annotated,
+        "diagnosis": result.diagnosis,
+        "final_chunk_ids": result.final_chunk_ids,
+        "candidate_chunk_ids": result.candidate_chunk_ids,
+        "retrieved_files": result.retrieved_files,
+        "query_rewritten": result.query_rewritten,
+        "query_rewritten_flag": result.query_rewritten_flag,
+        "final_context_text": result.final_context_text,
     }
 
 
-def _serialize_judge_result(jr) -> dict:
+def _serialize_judge_result(judge_result) -> dict:
     """序列化 JudgeResult 中需写入 per_query.json 的字段。"""
     return {
-        "faithfulness": jr.faithfulness,
-        "answer_relevancy": jr.answer_relevancy,
-        "context_precision": jr.context_precision,
-        "context_recall": jr.context_recall,
-        "answer_correctness": jr.answer_correctness,
-        "verdict": jr.verdict,
-        "parse_error": jr.parse_error,
-        "judge_error": jr.judge_error,
-        "generator_error": jr.generator_error,
-        "retrieve_ms": jr.retrieve_ms,
-        "generate_ms": jr.generate_ms,
-        "judge_faithfulness_ms": jr.judge_faithfulness_ms,
-        "judge_quality_ms": jr.judge_quality_ms,
+        "faithfulness": judge_result.faithfulness,
+        "answer_relevancy": judge_result.answer_relevancy,
+        "context_precision": judge_result.context_precision,
+        "context_recall": judge_result.context_recall,
+        "answer_correctness": judge_result.answer_correctness,
+        "verdict": judge_result.verdict,
+        "parse_error": judge_result.parse_error,
+        "judge_error": judge_result.judge_error,
+        "generator_error": judge_result.generator_error,
+        "retrieve_ms": judge_result.retrieve_ms,
+        "generate_ms": judge_result.generate_ms,
+        "judge_faithfulness_ms": judge_result.judge_faithfulness_ms,
+        "judge_quality_ms": judge_result.judge_quality_ms,
     }
 
 
 def _build_history(results_dir: str, output: LayerOutput, run_info: dict,
                     judge_results: list | None = None,
-                    metrics_summary: dict | None = None):
-    """向 history.jsonl 追加一行运行摘要。"""
+                    metrics_summary: dict | None = None) -> None:
+    """向 history.jsonl 追加一行运行摘要。
+
+    Args:
+        results_dir: 本次运行结果目录。
+        output: Layer 1 评估完整输出。
+        run_info: 运行配置快照。
+        judge_results: Layer 2 JudgeResult 列表（可选）。
+        metrics_summary: MonitorMetrics.summary_dict()（可选）。
+    """
     from config import _PROJECT_ROOT
     history_dir = str(_PROJECT_ROOT / "eval" / "results" / "check")
     os.makedirs(history_dir, exist_ok=True)
     history_path = os.path.join(history_dir, "history.jsonl")
 
-    agg = output.aggregate
+    aggregate = output.aggregate
     run_id = os.path.basename(results_dir)
     line = {
         "run_id": run_id,
         "timestamp": datetime.now().isoformat(),
         "test_mode": run_info.get("test_mode", "retrieval"),
         "benchmark": run_info.get("benchmark", ""),
-        "num_queries": agg.get("num_queries", 0),
-        "recall_at_k": round(agg.get("recall_at_k", 0.0), 4),
-        "precision_at_k": round(agg.get("precision_at_k", 0.0), 4),
-        "hit_at_k": round(agg.get("hit_at_k", 0.0), 4),
-        "mrr": round(agg.get("mrr", 0.0), 4),
-        "map_at_k": round(agg.get("map_at_k", 0.0), 4),
-        "ndcg_at_k": round(agg.get("ndcg_at_k", 0.0), 4),
+        "num_queries": aggregate.get("num_queries", 0),
+        "recall_at_k": round(aggregate.get("recall_at_k", 0.0), 4),
+        "precision_at_k": round(aggregate.get("precision_at_k", 0.0), 4),
+        "hit_at_k": round(aggregate.get("hit_at_k", 0.0), 4),
+        "mrr": round(aggregate.get("mrr", 0.0), 4),
+        "map_at_k": round(aggregate.get("map_at_k", 0.0), 4),
+        "ndcg_at_k": round(aggregate.get("ndcg_at_k", 0.0), 4),
     }
-    if agg.get("num_child_annotated", 0) > 0:
-        line["child_hit_at_k"] = round(agg.get("child_hit_at_k", 0.0), 4)
-        line["child_recall_at_k"] = round(agg.get("child_recall_at_k", 0.0), 4)
-        line["num_child_annotated"] = agg.get("num_child_annotated", 0)
+    if aggregate.get("num_child_annotated", 0) > 0:
+        line["child_hit_at_k"] = round(aggregate.get("child_hit_at_k", 0.0), 4)
+        line["child_recall_at_k"] = round(aggregate.get("child_recall_at_k", 0.0), 4)
+        line["num_child_annotated"] = aggregate.get("num_child_annotated", 0)
     if judge_results is not None:
-        l2 = _build_layer2_summary(judge_results)
-        line["faithfulness_avg"] = l2.get("faithfulness_avg")
-        line["answer_relevancy_avg"] = l2.get("answer_relevancy_avg")
-        line["context_precision_avg"] = l2.get("context_precision_avg")
-        line["context_recall_avg"] = l2.get("context_recall_avg")
-        line["answer_correctness_avg"] = l2.get("answer_correctness_avg")
+        layer2_summary = _build_layer2_summary(judge_results)
+        line["faithfulness_avg"] = layer2_summary.get("faithfulness_avg")
+        line["answer_relevancy_avg"] = layer2_summary.get("answer_relevancy_avg")
+        line["context_precision_avg"] = layer2_summary.get("context_precision_avg")
+        line["context_recall_avg"] = layer2_summary.get("context_recall_avg")
+        line["answer_correctness_avg"] = layer2_summary.get("answer_correctness_avg")
     if metrics_summary is not None:
         line["generator_cache_hit_rate"] = metrics_summary.get("generator_cache_hit_rate")
         line["judge_cache_hit_rate"] = metrics_summary.get("judge_cache_hit_rate")
@@ -176,61 +186,56 @@ def _build_history(results_dir: str, output: LayerOutput, run_info: dict,
         line["stage_judge_quality_p95"] = metrics_summary.get("stage_judge_quality_p95")
         line["stage_end_to_end_p50"] = metrics_summary.get("stage_end_to_end_p50")
         line["stage_end_to_end_p95"] = metrics_summary.get("stage_end_to_end_p95")
-    with open(history_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(line, ensure_ascii=False) + "\n")
+    append_jsonl(history_path, line)
 
 
 def _build_layer2_summary(judge_results: list) -> dict:
-    valid = [jr for jr in judge_results if jr.faithfulness is not None]
-    n = len(valid) if valid else 0
+    """计算 Layer 2 聚合：5 项均值 + verdict 分布 + judge/generator errors。"""
+    valid = [judge_result for judge_result in judge_results if judge_result.faithfulness is not None]
+    count = len(valid) if valid else 0
     return {
-        "num_valid": n,
+        "num_valid": count,
         "num_total": len(judge_results),
-        "faithfulness_avg": sum(j.faithfulness or 0 for j in valid) / n if n else None,
-        "answer_relevancy_avg": sum(j.answer_relevancy or 0 for j in valid) / n if n else None,
-        "context_precision_avg": sum(j.context_precision or 0 for j in valid) / n if n else None,
-        "context_recall_avg": sum(j.context_recall or 0 for j in valid) / n if n else None,
-        "answer_correctness_avg": sum(j.answer_correctness or 0 for j in valid) / n if n else None,
+        "faithfulness_avg": sum(judge_result.faithfulness or 0 for judge_result in valid) / count if count else None,
+        "answer_relevancy_avg": sum(judge_result.answer_relevancy or 0 for judge_result in valid) / count if count else None,
+        "context_precision_avg": sum(judge_result.context_precision or 0 for judge_result in valid) / count if count else None,
+        "context_recall_avg": sum(judge_result.context_recall or 0 for judge_result in valid) / count if count else None,
+        "answer_correctness_avg": sum(judge_result.answer_correctness or 0 for judge_result in valid) / count if count else None,
         "verdict_distribution": _count_verdicts(judge_results),
-        "judge_errors": sum(1 for jr in judge_results if jr.judge_error),
-        "generator_errors": sum(1 for jr in judge_results if jr.generator_error),
+        "judge_errors": sum(1 for judge_result in judge_results if judge_result.judge_error),
+        "generator_errors": sum(1 for judge_result in judge_results if judge_result.generator_error),
     }
 
 
 def _count_verdicts(judge_results: list) -> dict:
+    """统计 pass / partial / fail / error 各 verdict 数量。"""
     counts = {"pass": 0, "partial": 0, "fail": 0, "error": 0}
-    for jr in judge_results:
-        v = jr.verdict if jr.verdict in counts else "error"
-        counts[v] += 1
+    for judge_result in judge_results:
+        verdict = judge_result.verdict if judge_result.verdict in counts else "error"
+        counts[verdict] += 1
     return counts
 
 
-def _get_git_commit() -> str:
-    """获取当前 git commit 短哈希。"""
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
-            text=True, stderr=subprocess.DEVNULL
-        ).strip()
-    except Exception:
-        return "unknown"
-
-
 def build_run_info(benchmark_path: str, run_mode: str = "retrieval") -> dict:
-    """构建 run_info 配置快照。"""
-    from config import CHILD_CHUNK_SIZE, CHILD_OVERLAP, TOP_K as tk, LLM_MODEL_ID
+    """构建 run_info 配置快照。
+
+    Args:
+        benchmark_path: benchmark 文件路径。
+        run_mode: 运行模式（retrieval / full）。
+
+    Returns:
+        dict：含分块参数、模型 id、git commit、benchmark 路径的配置快照。
+    """
+    from config import CHILD_CHUNK_SIZE, CHILD_OVERLAP, TOP_K, LLM_MODEL_ID
     return {
         "timestamp": datetime.now().isoformat(),
         "chunk_size": CHILD_CHUNK_SIZE,
         "chunk_overlap": CHILD_OVERLAP,
-        "top_k": tk,
+        "top_k": TOP_K,
         "model_id": LLM_MODEL_ID,
-        "git_commit": _get_git_commit(),
+        "git_commit": get_git_commit(),
         "benchmark": benchmark_path,
         "test_mode": run_mode,
     }
 
 
-def _write_json(path: str, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)

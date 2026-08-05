@@ -20,9 +20,10 @@
     - load_benchmark: 加载并校验 benchmark JSON 文件
 """
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from eval.utils import read_json
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent  # eval/core/ → eval/ → 项目根
 
@@ -130,7 +131,7 @@ def _load_json(path: str) -> list:
     path_obj = Path(path)
     if not path_obj.is_absolute():
         path_obj = _PROJECT_ROOT / path_obj
-    if not path_obj.exists():
+    data = read_json(path_obj)
+    if data is None:
         raise FileNotFoundError(f"Benchmark 文件不存在: {path}")
-    with open(path_obj, "r", encoding="utf-8") as file_handle:
-        return json.load(file_handle)
+    return data

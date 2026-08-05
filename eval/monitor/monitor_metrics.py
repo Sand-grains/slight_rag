@@ -28,20 +28,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-
-def _mean_of(values: list[float]) -> float | None:
-    """非 None 值的均值。全为 None 时返回 None。
-
-    Args:
-        values: 数值列表（可含 None）。
-
-    Returns:
-        float | None：非 None 值的均值；全 None 时返回 None。
-    """
-    present = [value for value in values if value is not None]
-    if not present:
-        return None
-    return sum(present) / len(present)
+from eval.utils import mean_of, percentile, p95
 
 
 @dataclass
@@ -156,20 +143,13 @@ class MonitorMetrics:
         output_cost = (self.total_output_tokens / 1000) * self.output_price_per_1k
         return input_cost + output_cost
 
-    @staticmethod
-    def _p95(values: list[float]) -> float:
-        if not values:
-            return 0.0
-        import numpy
-        return float(numpy.percentile(values, 95))
-
     @property
     def input_tokens_p95(self) -> float:
-        return self._p95(self.input_tokens_list)
+        return p95(self.input_tokens_list)
 
     @property
     def output_tokens_p95(self) -> float:
-        return self._p95(self.output_tokens_list)
+        return p95(self.output_tokens_list)
 
     # ---- 聚合方法（MonitorPanel 面板和 render_final 共用）----
     def layer1_means(self) -> dict[str, float]:
@@ -192,11 +172,11 @@ class MonitorMetrics:
         if not valid_results:
             return {}
         return {
-            "faithfulness": _mean_of([result.faithfulness for result in valid_results]),
-            "answer_relevancy": _mean_of([result.answer_relevancy for result in valid_results]),
-            "context_precision": _mean_of([result.context_precision for result in valid_results]),
-            "context_recall": _mean_of([result.context_recall for result in valid_results]),
-            "answer_correctness": _mean_of([result.answer_correctness for result in valid_results]),
+            "faithfulness": mean_of([result.faithfulness for result in valid_results]),
+            "answer_relevancy": mean_of([result.answer_relevancy for result in valid_results]),
+            "context_precision": mean_of([result.context_precision for result in valid_results]),
+            "context_recall": mean_of([result.context_recall for result in valid_results]),
+            "answer_correctness": mean_of([result.answer_correctness for result in valid_results]),
         }
 
     def verdict_distribution(self) -> dict[str, int]:
@@ -214,17 +194,13 @@ class MonitorMetrics:
             "judge_quality": list(self.stage_judge_quality_ms),
             "end_to_end": list(self.stage_end_to_end_ms),
         }
-        import numpy
         result = {}
         for name, values in stages.items():
-            if not values:
-                result[name] = {"p50": 0.0, "p75": 0.0, "p95": 0.0}
-            else:
-                result[name] = {
-                    "p50": float(numpy.percentile(values, 50)),
-                    "p75": float(numpy.percentile(values, 75)),
-                    "p95": float(numpy.percentile(values, 95)),
-                }
+            result[name] = {
+                "p50": percentile(values, 50),
+                "p75": percentile(values, 75),
+                "p95": percentile(values, 95),
+            }
         return result
 
     # ---- 序列化 ----
