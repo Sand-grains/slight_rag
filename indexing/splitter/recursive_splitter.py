@@ -16,7 +16,7 @@ from .utils import _HEADING_REGEX, find_fenced_block_ranges, overlaps_code
 
 
 class RecursiveCharacterTextSplitter(BaseSplitter):
-    """按分隔符栈递归切分到 chunk_size（字符）, 代码块保持完整，支持 overlap。"""
+    """按分隔符栈递归切分, 并使分块大小符合 chunk_size（字符）, 代码块保持完整，支持 overlap。"""
 
     def __init__(self, chunk_size: int, chunk_overlap: int = 0,
                  separators: Sequence[str] | None = None, chunk_level: str = "child"):
@@ -42,7 +42,8 @@ class RecursiveCharacterTextSplitter(BaseSplitter):
         code_ranges = find_fenced_block_ranges(text)
         pieces = self._split_text(text, code_ranges)
         pieces = self._merge_isolated_headings(pieces)
-        pieces = self._apply_overlap(pieces)
+        pieces = self._merge_code_adjacent_micro_ws(pieces, code_ranges)
+        pieces = self._apply_overlap(pieces, code_ranges)
         chunks = []
         for i, (content, start) in enumerate(pieces):
             chunk = self._package_to_chunk(content, metadata, start_char_index=start)
@@ -167,7 +168,8 @@ class RecursiveCharacterTextSplitter(BaseSplitter):
 
         Returns:
             list[(content, start)]：硬切后的片段及其全局起始偏移。若切分
-            边界落在代码块内，则把边界拉到代码块结尾以保证代码块完整；
+            边界落在代码块内，则把边界拉到代码块结尾并吞掉其后连续的
+            换行，保证代码块完整且尾部 \n 不成为孤儿微块；
             若代码块过长导致边界无法推进，退化为 chunk_size 边界兜底。
         """
         pieces = []
@@ -178,6 +180,8 @@ class RecursiveCharacterTextSplitter(BaseSplitter):
             for code_range_start, code_range_end in code_ranges:
                 if code_range_start <= segment_start + end_index < code_range_end:
                     end_index = min(code_range_end, segment_start + length) - segment_start
+                    while end_index < length and segment[end_index] == "\n":
+                        end_index += 1   # 吞尾随换行：孤儿 \n 在硬切源头消失
                     break
             if end_index <= cursor_index:
                 end_index = min(cursor_index + self._chunk_size, length)
@@ -213,24 +217,63 @@ class RecursiveCharacterTextSplitter(BaseSplitter):
 
     # ---- 后处理 ----
 
-    def _apply_overlap(self, pieces: list[tuple[str, int]]) -> list[tuple[str, int]]:
-        """为相邻片段应用重叠：把前一块的尾部拼到当前块头部。
+    def _apply_overlap(self, pieces: list[tuple[str, int]],
+                       code_ranges: list[tuple[int, int]]) -> list[tuple[str, int]]:
+        """为相邻片段应用重叠，但不跨代码块边界回填。
 
         Args:
             pieces: 切分后的 (content, start) 片段列表。
+            code_ranges: fenced code block 的全局 [(start, end), ...] 区间列表。
+                前一块尾部窗口与任一代码区间重叠时跳过 overlap，防止代码
+                尾巴 + 闭合围栏污染下一块（代码→正文）。
 
         Returns:
-            list[(content, start)]：重叠后的片段列表，start 保持原值，
-            仅 content 头部追加前一块的尾部字符。
+            list[(content, start)]：重叠后的片段列表。窗口起点
+            start - min(overlap, len(prev)) 保证不越过 prev 起点（无越界
+            误判）；start 保持原值（指向片段自身内容起点，不含 overlap 前缀）。
         """
         if self._chunk_overlap <= 0:
             return pieces
         result = []
-        for i, (content, start) in enumerate(pieces):
+        for content, start in pieces:
             if result:
-                prev_content = result[-1][0]
-                content = prev_content[-self._chunk_overlap:] + content
+                prev_content, _ = result[-1]
+                window_start = start - min(self._chunk_overlap, len(prev_content))
+                if not overlaps_code(window_start, start, code_ranges):
+                    content = prev_content[-self._chunk_overlap:] + content
             result.append((content, start))
+        return result
+
+    @staticmethod
+    def _merge_code_adjacent_micro_ws(pieces: list[tuple[str, int]],
+                                      code_ranges: list[tuple[int, int]]) -> list[tuple[str, int]]:
+        """把"紧跟代码块"的纯空白微块（ ≤2 字符）并入邻片。
+
+        Args:
+            pieces: 切分后的 (content, start) 片段列表。
+            code_ranges: fenced code block 的全局 [(start, end), ...] 区间列表。
+
+        Returns:
+            list[(content, start)]：微块被并入邻片后的片段列表。微块是超长
+            代码块后的 \n\n 经 \n 级切分留下的 1 字符孤儿（start 距某
+            code_range_end ≤ 2）；纯文本无代码块 → 无命中 → 逐字节不变。
+            首片微块并入后一片。
+        """
+        result = list(pieces)
+        index = 0
+        while index < len(result):
+            content, start = result[index]
+            adjacent = any(0 <= start - code_range_end <= 2 for _, code_range_end in code_ranges)
+            if content.strip() == "" and len(content) <= 2 and adjacent:
+                if index > 0:
+                    prev_content, prev_start = result[index - 1]
+                    result[index - 1] = (prev_content + content, prev_start)
+                elif index + 1 < len(result):
+                    next_content, next_start = result[index + 1]
+                    result[index + 1] = (content + next_content, next_start)
+                result.pop(index)
+            else:
+                index += 1
         return result
 
     def _merge_isolated_headings(self, pieces: list[tuple[str, int]]) -> list[tuple[str, int]]:
