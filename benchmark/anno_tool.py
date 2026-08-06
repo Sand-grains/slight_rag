@@ -7,7 +7,7 @@ Phase 2：检索/benchmark 单元为**父块**，标注父块 id。展示父块�
   - 逐块展示父块全文（structured 文档渲染 section_path，flat 显示 "—"），Enter 标注 / e 跳过 / m 结束本条
   - argparse：--source 默认 benchmark/private_v5.json，--output 默认 benchmark/private_v6.json
 
-用法:  uv run python benchmark/anno_tool.py --output benchmark/private_v6.json
+用法: uv run python benchmark/anno_tool.py --source benchmark/private_v6.json
 """
 from __future__ import annotations
 
@@ -33,9 +33,9 @@ DONE_KEY = "m"
 
 VALID_DIFFICULTY = ["single_chunk", "multi_chunk"]
 
-# 每次标注从上一版读、写到下一版
-_DEFAULT_SOURCE = os.path.join(_PROJECT_DIR, "benchmark", "private_v5.json")
-_DEFAULT_OUTPUT = os.path.join(_PROJECT_DIR, "benchmark", "private_v6.json")
+# 默认 source 与 output 路径
+_DEFAULT_SOURCE = os.path.join(_PROJECT_DIR, "benchmark", "private_v6.json") # 当前正在标注版本
+_DEFAULT_OUTPUT = os.path.join(_PROJECT_DIR, "benchmark", "private_v6.json") # 设置为当前版本
 
 
 # ---- 加载 / 保存 benchmark----
