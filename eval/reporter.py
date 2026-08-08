@@ -170,6 +170,7 @@ def _build_history(results_dir: str, output: LayerOutput, run_info: dict,
     if metrics_summary is not None:
         line["generator_cache_hit_rate"] = metrics_summary.get("generator_cache_hit_rate")
         line["judge_cache_hit_rate"] = metrics_summary.get("judge_cache_hit_rate")
+        line["rerank_cache_hit_rate"] = metrics_summary.get("rerank_cache_hit_rate")
         line["estimated_cost"] = metrics_summary.get("estimated_cost")
         line["retry_count"] = metrics_summary.get("retry_count")
         line["parse_error_count"] = metrics_summary.get("parse_error_count")

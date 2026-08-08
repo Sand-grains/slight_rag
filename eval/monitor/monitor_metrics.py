@@ -134,6 +134,14 @@ class MonitorMetrics:
         return self.judge_cache_hits / total if total > 0 else 0.0
 
     @property
+    def rerank_cache_hit_rate(self) -> float | None:
+        """rerank 缓存命中率；无任何 rerank 调用时返回 None（面板/报告显示 —）。"""
+        from retrieval.reranker import get_rerank_cache_stats
+        stats = get_rerank_cache_stats()
+        total = stats["hits"] + stats["misses"]
+        return stats["hits"] / total if total > 0 else None
+
+    @property
     def error_rate(self) -> float:
         return self.error_count / self.total_llm_calls if self.total_llm_calls > 0 else 0.0
 
@@ -206,6 +214,7 @@ class MonitorMetrics:
     # ---- 序列化 ----
     def summary_dict(self) -> dict:
         stage_percentiles_map = self.stage_percentiles()
+        rerank_hit_rate = self.rerank_cache_hit_rate
         return {
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
@@ -214,6 +223,7 @@ class MonitorMetrics:
             "estimated_cost": round(self.estimated_cost, 6),
             "generator_cache_hit_rate": round(self.generator_cache_hit_rate, 4),
             "judge_cache_hit_rate": round(self.judge_cache_hit_rate, 4),
+            "rerank_cache_hit_rate": round(rerank_hit_rate, 4) if rerank_hit_rate is not None else None,
             "error_rate": round(self.error_rate, 4),
             "errors_by_type": dict(self.error_types),
             "retry_count": self.retry_count,

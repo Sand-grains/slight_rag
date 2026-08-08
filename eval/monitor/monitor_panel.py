@@ -407,8 +407,16 @@ class MonitorPanel:
             print("  ────────────")
             generator_rate = f"{metrics.generator_cache_hits} hit / {metrics.generator_cache_misses} miss ({metrics.generator_cache_hit_rate:.1%})"
             judge_rate = f"{metrics.judge_cache_hits} hit / {metrics.judge_cache_misses} miss ({metrics.judge_cache_hit_rate:.1%})"
+            rerank_hit_rate = metrics.rerank_cache_hit_rate
+            if rerank_hit_rate is None:
+                rerank_line = "—"  # 无 rerank 调用（rerank 关 / 基线 / 控制组）
+            else:
+                from retrieval.reranker import get_rerank_cache_stats
+                rerank_stats = get_rerank_cache_stats()
+                rerank_line = f"{rerank_stats['hits']} hit / {rerank_stats['misses']} miss ({rerank_hit_rate:.1%})"
             print(f"  Generator 缓存: {generator_rate}")
             print(f"  Judge 缓存:     {judge_rate}")
+            print(f"  Rerank 缓存:     {rerank_line}")
             print(f"  估算成本:       ¥{metrics.estimated_cost:.2f}")
 
             print()
