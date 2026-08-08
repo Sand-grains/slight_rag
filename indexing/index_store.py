@@ -11,6 +11,7 @@
 - get_parents 按 parent_id 取父块（RRF 融合后统一落到父块）
 """
 import pickle
+from dataclasses import replace
 from pathlib import Path
 
 import jieba
@@ -266,7 +267,10 @@ class IndexStore:
         top_scores = scores[top_indices]
         sorted_order = numpy.argsort(top_scores)
         top_indices = top_indices[numpy.flip(sorted_order)]
-        return [self._children[index] for index in top_indices]
+        return [
+            replace(self._children[index], metadata={**self._children[index].metadata, "dense_score": float(scores[index])})
+            for index in top_indices
+        ]
 
     def _search_sparse_memory(self, query: str, top_k: int = TOP_K) -> list[Chunk]:
         """Memory模式稀疏检索：jieba 分词 → BM25Okapi 打分取 top_k 父块。
@@ -361,15 +365,16 @@ class IndexStore:
         """
         results = self._milvus.search_dense(query_vector, top_k)  # [(chunk_id, parent_id, content, score)]
         children = []
-        for chunk_id, parent_id, content, _score in results:
+        for chunk_id, parent_id, content, score in results:
             parent = self._chunks_cache.get(parent_id)
-            children.append(Chunk(
-                chunk_id=chunk_id,
-                doc_id=parent.doc_id if parent else "",
-                content=content,
-                origin_metadata=parent.origin_metadata if parent else DocMetadata(),
-                metadata={"parent_id": parent_id} if parent_id else {},
-            ))
+            children.append(
+                Chunk(
+                    chunk_id=chunk_id,
+                    doc_id=parent.doc_id if parent else "",
+                    content=content,
+                    origin_metadata=parent.origin_metadata if parent else DocMetadata(),
+                    metadata={"parent_id": parent_id, "dense_score": float(score)} if parent_id else {}, # 子块携带显式的 dense_score 元数据
+                ))
         return children
 
     def _search_sparse_external(self, query: str, top_k: int = TOP_K) -> list[Chunk]:
