@@ -8,6 +8,18 @@ Phase 2：检索/benchmark 单元为**父块**，标注父块 id。展示父块�
   - argparse：--source 默认 benchmark/private_v5.json，--output 默认 benchmark/private_v6.json
 
 用法: uv run python benchmark/anno_tool.py --source benchmark/private_v6.json
+
+说明:
+  当前 relevance 只能按父块打，子块轨 `expected_child_ids` 是纯二元"证据子块"勾选
+  略有相关的兄弟子块无表达渠道(父块级 relevance 分级已能覆盖大部分需求)
+
+  检索难度(difficulty)判定依据: 完整答案需要的检索单元(父块)数，而不看有证据子块数
+  父块数: 1 → single_chunk，2~3（相邻）→ multi_chunk
+
+  理由：检索单元是父块（一个父块命中即答案到齐），生成上下文也是父块（子块检索、父块作辅助上下文），
+  子块级切碎是切块产物、算不改变检索难度，算 single 才避免"所有长答案都被标成 multi"的标签稀释
+  另外注意 difficulty 属于 纯描述性分组字段 （eval模块中 retrieval_layer 仅用于 by_difficulty 分组统计），不影响任何实际指标计算
+
 """
 from __future__ import annotations
 
