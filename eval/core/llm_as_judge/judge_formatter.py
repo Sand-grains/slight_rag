@@ -30,7 +30,7 @@ from eval.utils import fill
 if TYPE_CHECKING:
     from indexing.chunk import Chunk
 
-_PROMPTS_DIR = Path(__file__).parent / "prompts"
+_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 def _load_prompt(filename: str) -> str:
